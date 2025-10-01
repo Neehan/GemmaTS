@@ -61,6 +61,9 @@ class Config:
     chronos_pretrained: str = "amazon/chronos-bolt-tiny"
     input_patch_size: int = 16
     input_patch_stride: int = 8
+    text_prompt: str = (
+        "Predict the next values of this time series:"  # Optional: "Predict the next values:" or None for no prompt
+    )
 
     # Paths
     output_dir: str = "data/checkpoints/gemma_ts_etth1"
@@ -190,6 +193,7 @@ def main(test_mode):
         prediction_length=config.pred_len,
         patch_size=config.input_patch_size,
         patch_stride=config.input_patch_stride,
+        text_prompt=config.text_prompt,
     )
 
     # Training arguments

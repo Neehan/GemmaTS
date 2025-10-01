@@ -3,7 +3,7 @@
 import os
 import torch
 import torch.nn as nn
-from transformers import AutoModelForCausalLM
+from transformers import AutoModelForCausalLM, AutoTokenizer
 from chronos.chronos_bolt import ChronosBoltModelForForecasting
 from typing import Optional
 
@@ -14,14 +14,16 @@ class GemmaTS(ChronosBoltModelForForecasting):
     Everything else (encoder, output head, loss) is unchanged.
     """
 
-    def __init__(self, config, gemma_model_name: str = "google/gemma-2-2b"):
+    def __init__(
+        self, config, gemma_model_name: str, text_prompt: Optional[str] = None
+    ):
         # Initialize parent (this creates encoder, output head, etc.)
         super().__init__(config)
 
         # Now replace the decoder
-        self._init_gemma_decoder(gemma_model_name)
+        self._init_gemma_decoder(gemma_model_name, text_prompt)
 
-    def _init_gemma_decoder(self, model_name: str):
+    def _init_gemma_decoder(self, model_name: str, text_prompt: Optional[str] = None):
         """Replace T5 decoder with Gemma."""
         # Remove T5 decoder
         del self.decoder
@@ -34,7 +36,17 @@ class GemmaTS(ChronosBoltModelForForecasting):
         self.gemma = gemma.model
         gemma_dim = gemma.config.hidden_size
 
-        # Store BOS token ID to use its embedding directly
+        # Optional: Set up text prompt if provided
+        if text_prompt is not None:
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name, token=hf_token)
+            prompt_tokens = self.tokenizer(
+                text_prompt, return_tensors="pt", add_special_tokens=False
+            )
+            self.prompt_ids = prompt_tokens.input_ids[0]  # Shape: (num_tokens,)
+        else:
+            self.prompt_ids = None
+
+        # Store BOS token ID
         self.bos_token_id = gemma.config.bos_token_id
         if self.bos_token_id is None:
             raise ValueError("BOS token ID is not set for Gemma model")
@@ -51,25 +63,48 @@ class GemmaTS(ChronosBoltModelForForecasting):
         self, input_embeds, attention_mask, hidden_states, output_attentions=False
     ):
         """
-        Replace T5 decoder with Gemma.
+        Replace T5 decoder with Gemma, optionally using text prompt.
 
         Returns: (B, 1, d_model) to match Chronos Bolt's expectation
         """
         B = hidden_states.shape[0]
+        device = hidden_states.device
 
-        # Project encoder outputs to Gemma dimension
-        h = self.enc_to_gemma(hidden_states)
+        # Project encoder outputs (time series) to Gemma dimension
+        h = self.enc_to_gemma(hidden_states)  # (B, seq_len, dim)
 
-        # Get BOS token embedding (always up-to-date with fine-tuning)
+        # Get BOS token embedding
         bos_embed = self.gemma.embed_tokens.weight[self.bos_token_id]
-        dec_start = bos_embed.unsqueeze(0).unsqueeze(0).expand(B, -1, -1)
-        combined = torch.cat([h, dec_start], dim=1)
+        bos_embed = bos_embed.unsqueeze(0).unsqueeze(0).expand(B, -1, -1)  # (B, 1, dim)
 
-        # Extend attention mask
-        dec_mask = torch.ones(
-            B, 1, device=attention_mask.device, dtype=attention_mask.dtype
-        )
-        full_mask = torch.cat([attention_mask, dec_mask], dim=1)
+        # Conditionally add text prompt if configured
+        if self.prompt_ids is not None:
+            # Get prompt embeddings
+            prompt_ids = self.prompt_ids.to(device)
+            prompt_embeds = self.gemma.embed_tokens(
+                prompt_ids
+            )  # (num_prompt_tokens, dim)
+            prompt_embeds = prompt_embeds.unsqueeze(0).expand(
+                B, -1, -1
+            )  # (B, num_prompt_tokens, dim)
+
+            # Concatenate: [prompt, time_series, bos]
+            combined = torch.cat([prompt_embeds, h, bos_embed], dim=1)
+
+            # Create attention mask for all tokens
+            num_prompt_tokens = prompt_embeds.shape[1]
+            prompt_mask = torch.ones(
+                B, num_prompt_tokens, device=device, dtype=attention_mask.dtype
+            )
+            bos_mask = torch.ones(B, 1, device=device, dtype=attention_mask.dtype)
+            full_mask = torch.cat([prompt_mask, attention_mask, bos_mask], dim=1)
+        else:
+            # No prompt: just [time_series, bos]
+            combined = torch.cat([h, bos_embed], dim=1)
+
+            # Create attention mask
+            bos_mask = torch.ones(B, 1, device=device, dtype=attention_mask.dtype)
+            full_mask = torch.cat([attention_mask, bos_mask], dim=1)
 
         # Pass through Gemma
         out = self.gemma(
@@ -122,6 +157,7 @@ def create_gemma_ts(
     prediction_length: int = 64,
     patch_size: int = 16,
     patch_stride: int = 8,
+    text_prompt: Optional[str] = None,
 ):
     """Create GemmaTS from Chronos config."""
     from transformers import AutoConfig
@@ -135,4 +171,4 @@ def create_gemma_ts(
     config.chronos_config["input_patch_size"] = patch_size
     config.chronos_config["input_patch_stride"] = patch_stride
 
-    return GemmaTS(config, gemma_model)
+    return GemmaTS(config, gemma_model, text_prompt)
