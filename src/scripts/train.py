@@ -49,11 +49,12 @@ class Config:
     batch_size: int = 4
     num_workers: int = 0
     lr: float = 2e-4
-    max_steps: int = 1000
-    eval_steps: int = 100
-    save_steps: int = 100
+    num_train_epochs: int = 5
+    max_steps: int = -1  # -1 means use num_train_epochs instead
+    eval_steps: int = 500
+    save_steps: int = 500
     warmup_steps: int = 100
-    logging_steps: int = 10
+    logging_steps: int = 50
 
     # GemmaTS config
     gemma_model_name: str = "google/gemma-3-270m"
@@ -156,9 +157,11 @@ def main(test_mode):
     set_seed(config.seed)
 
     if test_mode:
-        logger.warning("Running in TEST MODE - will only process one sample")
-        config.max_steps = 1
-        config.eval_steps = 2
+        logger.warning("Running in TEST MODE - will only process a few steps")
+        config.num_train_epochs = 1
+        config.max_steps = 10
+        config.eval_steps = 5
+        config.save_steps = 5
 
     # Load data
     logger.info("Loading data...")
@@ -187,8 +190,9 @@ def main(test_mode):
     )
 
     # Training arguments
-    training_args = TrainingArguments(
+    training_args = TrainingArguments(  # type: ignore[call-arg]
         output_dir=config.output_dir,
+        num_train_epochs=config.num_train_epochs,
         max_steps=config.max_steps,
         per_device_train_batch_size=config.batch_size,
         per_device_eval_batch_size=config.batch_size,

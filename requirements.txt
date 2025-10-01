@@ -1,8 +1,11 @@
-torch>=2.3
-transformers>=4.44
-accelerate>=0.34
+torch>=2.3.0
+torchvision>=0.18.0
+transformers>=4.50.0
+accelerate>=1.2.0
 datasets>=3.0
 chronos-forecasting>=1.2.0
 numpy
 pandas
 tqdm
+scikit-learn
+python-dotenv
