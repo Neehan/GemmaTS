@@ -40,6 +40,7 @@ class Dataset_ETT_hour(Dataset):  # type: ignore[misc]
 
         self.features = features
         self.target = target
+        self.scale = scale
         self.timeenc = timeenc
         self.freq = freq
 
