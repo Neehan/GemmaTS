@@ -69,8 +69,16 @@ class GemmaTSTrainer(Trainer):
         context = inputs["context"]
         target = inputs["target"]
 
-        outputs = model(context=context, mask=None, target=target, target_mask=None)
-        loss = outputs.loss
+        outputs = model(context=context, mask=None, target=None, target_mask=None)
+
+        # Get median quantile prediction
+        chronos_cfg = model.module.chronos_config if hasattr(model, "module") else model.chronos_config
+        quantiles = chronos_cfg.quantiles
+        median_idx = quantiles.index(0.5) if 0.5 in quantiles else len(quantiles) // 2
+        preds = outputs.quantile_preds[:, median_idx, :]
+
+        # Compute MSE loss
+        loss = torch.nn.functional.mse_loss(preds, target)
 
         return (loss, outputs) if return_outputs else loss
 
@@ -94,7 +102,6 @@ class GemmaTSTrainer(Trainer):
             batch = self._prepare_inputs(batch)
 
             with torch.no_grad():
-                # No target during evaluation - predict blind!
                 outputs = model(  # type: ignore[misc]
                     context=batch["context"],
                     mask=None,
@@ -105,7 +112,6 @@ class GemmaTSTrainer(Trainer):
             preds = outputs.quantile_preds[:, median_idx, :].cpu()  # type: ignore[attr-defined]
             target_cpu = batch["target"].cpu()
 
-            # Compute loss manually for logging
             loss = torch.nn.functional.mse_loss(preds, target_cpu)
             all_losses.append(loss.item())
             all_mse.append(mse(target_cpu, preds))
