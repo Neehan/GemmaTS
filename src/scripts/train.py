@@ -49,7 +49,7 @@ class Config:
     batch_size: int = 64
     num_workers: int = 0
     lr: float = 2e-4
-    num_train_epochs: int = 5
+    num_train_epochs: int = 20
     max_steps: int = -1  # -1 means use num_train_epochs instead
     eval_steps: int = 500
     save_steps: int = 500
@@ -126,17 +126,20 @@ class GemmaTSTrainer(Trainer):
             batch = self._prepare_inputs(batch)
 
             with torch.no_grad():
+                # No target during evaluation - predict blind!
                 outputs = model(  # type: ignore[misc]
                     context=batch["context"],
                     mask=None,
-                    target=batch["target"],
+                    target=None,
                     target_mask=None,
                 )
 
             preds = outputs.quantile_preds[:, median_idx, :].cpu()  # type: ignore[attr-defined]
             target_cpu = batch["target"].cpu()
 
-            all_losses.append(outputs.loss.item())  # type: ignore[attr-defined]
+            # Compute loss manually for logging
+            loss = torch.nn.functional.mse_loss(preds, target_cpu)
+            all_losses.append(loss.item())
             all_mse.append(mse(target_cpu, preds))
             all_mae.append(mae(target_cpu, preds))
             all_smape.append(smape(target_cpu, preds))
