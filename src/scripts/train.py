@@ -16,11 +16,14 @@ from transformers.trainer import Trainer
 from transformers.training_args import TrainingArguments
 
 from src.models.gemma_ts import create_gemma_ts
+from src.models.chronos_bolt import create_chronos_bolt
 from src.dataloader.data_factory import data_provider
 from src.utils.metrics import mse, mae, smape
 from src.utils.seed import set_seed
 from src.configs.test import Config as TestConfig
 from src.configs.full_train import Config as FullTrainConfig
+from src.configs.chronos import Config as ChronosConfig
+from src.configs.chronos_test import Config as ChronosTestConfig
 
 # Setup logging
 logging.basicConfig(
@@ -33,6 +36,8 @@ logger = logging.getLogger(__name__)
 CONFIGS = {
     "test": TestConfig,
     "full_train": FullTrainConfig,
+    "chronos": ChronosConfig,
+    "chronos_test": ChronosTestConfig,
 }
 
 
@@ -165,16 +170,26 @@ def main(config_name):
     logger.info(f"Test samples: {len(test_ds)}")
 
     # Initialize model
-    logger.info("Initializing GemmaTS model...")
-    model = create_gemma_ts(
-        chronos_base=config.chronos_pretrained,
-        gemma_model=config.gemma_model_name,
-        context_length=config.seq_len,
-        prediction_length=config.pred_len,
-        patch_size=config.input_patch_size,
-        patch_stride=config.input_patch_stride,
-        text_prompt=config.text_prompt,
-    )
+    if config_name in ["chronos", "chronos_test"]:
+        logger.info("Initializing Chronos Bolt baseline model...")
+        model = create_chronos_bolt(
+            chronos_base=config.chronos_pretrained,
+            context_length=config.seq_len,
+            prediction_length=config.pred_len,
+            patch_size=config.input_patch_size,
+            patch_stride=config.input_patch_stride,
+        )
+    else:
+        logger.info("Initializing GemmaTS model...")
+        model = create_gemma_ts(
+            chronos_base=config.chronos_pretrained,
+            gemma_model=config.gemma_model_name,
+            context_length=config.seq_len,
+            prediction_length=config.pred_len,
+            patch_size=config.input_patch_size,
+            patch_stride=config.input_patch_stride,
+            text_prompt=config.text_prompt,
+        )
 
     # Training arguments
     training_args = TrainingArguments(  # type: ignore
