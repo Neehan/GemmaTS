@@ -31,7 +31,7 @@ class GemmaTS(ChronosBoltModelForForecasting):
         # Load Gemma with HF token if available
         hf_token = os.getenv("HF_TOKEN")
         gemma = AutoModelForCausalLM.from_pretrained(
-            model_name, dtype=torch.float32, token=hf_token
+            model_name, torch_dtype=torch.float32, token=hf_token
         )
         self.gemma = gemma.model
         gemma_dim = gemma.config.hidden_size

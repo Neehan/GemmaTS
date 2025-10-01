@@ -3,11 +3,13 @@
 import os
 import argparse
 import logging
-from dataclasses import dataclass
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
+# Disable tokenizer parallelism warning
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 import torch
 from transformers.trainer import Trainer
@@ -17,6 +19,8 @@ from src.models.gemma_ts import create_gemma_ts
 from src.dataloader.data_factory import data_provider
 from src.utils.metrics import mse, mae, smape
 from src.utils.seed import set_seed
+from src.configs.test import Config as TestConfig
+from src.configs.full_train import Config as FullTrainConfig
 
 # Setup logging
 logging.basicConfig(
@@ -26,51 +30,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-
-@dataclass
-class Config:
-    """Configuration for GemmaTS training."""
-
-    # Data config
-    data: str = "ETTh1"
-    root_path: str = "data/datasets/ETT-small/"
-    data_path: str = "ETTh1.csv"
-    features: str = "S"
-    target: str = "OT"
-    freq: str = "h"
-    embed: str = "timeF"
-
-    # Model config
-    seq_len: int = 512
-    label_len: int = 128
-    pred_len: int = 96
-
-    # Training config
-    batch_size: int = 64
-    num_workers: int = 0
-    lr: float = 2e-4
-    num_train_epochs: int = 20
-    max_steps: int = -1  # -1 means use num_train_epochs instead
-    eval_steps: int = 500
-    save_steps: int = 500
-    warmup_steps: int = 100
-    logging_steps: int = 50
-
-    # GemmaTS config
-    gemma_model_name: str = "google/gemma-3-270m"
-    chronos_pretrained: str = "amazon/chronos-bolt-tiny"
-    input_patch_size: int = 16
-    input_patch_stride: int = 8
-    text_prompt: str = (
-        "Predict the next values of this time series:"  # Optional: "Predict the next values:" or None for no prompt
-    )
-
-    # Paths
-    output_dir: str = "data/checkpoints/gemma_ts_etth1"
-    seed: int = 42
-
-
-config = Config()
+CONFIGS = {
+    "test": TestConfig,
+    "full_train": FullTrainConfig,
+}
 
 
 class TimeSeriesDataset(torch.utils.data.Dataset):
@@ -87,6 +50,8 @@ class TimeSeriesDataset(torch.utils.data.Dataset):
         seq_x, seq_y, seq_x_mark, seq_y_mark = self.dataset[idx]
 
         context = torch.from_numpy(seq_x)
+        # seq_y contains [label_len + pred_len] values
+        # We only want the last pred_len values (pure future, no overlap with context)
         target = torch.from_numpy(seq_y[-self.pred_len :, :])
 
         if context.shape[-1] == 1:
@@ -158,16 +123,13 @@ class GemmaTSTrainer(Trainer):
         return metrics
 
 
-def main(test_mode):
+def main(config_name):
     """Main training loop."""
-    set_seed(config.seed)
+    if config_name not in CONFIGS:
+        raise ValueError(f"Unknown config: {config_name}. Available: {list(CONFIGS.keys())}")
 
-    if test_mode:
-        logger.warning("Running in TEST MODE - will only process a few steps")
-        config.num_train_epochs = 1
-        config.max_steps = 10
-        config.eval_steps = 5
-        config.save_steps = 5
+    config = CONFIGS[config_name]()
+    set_seed(config.seed)
 
     # Load data
     logger.info("Loading data...")
@@ -197,7 +159,7 @@ def main(test_mode):
     )
 
     # Training arguments
-    training_args = TrainingArguments(  # type: ignore[call-arg]
+    training_args = TrainingArguments(  # type: ignore
         output_dir=config.output_dir,
         num_train_epochs=config.num_train_epochs,
         max_steps=config.max_steps,
@@ -244,10 +206,11 @@ def main(test_mode):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train GemmaTS model with HF Trainer")
     parser.add_argument(
-        "--test",
-        action="store_true",
-        help="Run in test mode (single sample only to verify everything works)",
+        "--config",
+        type=str,
+        default="full_train",
+        help="Config name from configs directory (default: full_train)",
     )
     args = parser.parse_args()
 
-    main(test_mode=args.test)
+    main(config_name=args.config)

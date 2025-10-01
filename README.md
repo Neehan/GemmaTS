@@ -36,13 +36,28 @@ cp .env.example .env
 
 ## Training
 
-### Single GPU / CPU
+### Quick Start
 
-Run as a Python module from the project root:
-
+1. **Activate environment** (if using conda):
 ```bash
-python -m src.scripts.train
+conda activate weather
+export KMP_DUPLICATE_LIB_OK=TRUE  # Required for macOS
 ```
+
+2. **Run training** as a Python module from project root:
+```bash
+# Quick test (10 steps)
+python -m src.scripts.train --config test
+
+# Full training (20 epochs)
+python -m src.scripts.train --config full_train
+```
+
+### Configuration Files
+
+Configs are in `src/configs/`:
+- `test.py`: Quick test (10 steps, 1 epoch)
+- `full_train.py`: Full training (20 epochs)
 
 ### Multi-GPU (HPC cluster)
 
@@ -55,28 +70,13 @@ accelerate config
 Then launch training:
 
 ```bash
-accelerate launch src/scripts/train.py
+accelerate launch src/scripts/train.py --config full_train
 ```
 
 For 4 GPUs with mixed precision (fp16):
 
 ```bash
-accelerate launch --num_processes=4 --mixed_precision=fp16 src/scripts/train.py
-```
-
-Configuration in `src/scripts/train.py`:
-```python
-config = {
-    "gemma_model_name": "google/gemma-3-270m",
-    "chronos_pretrained": "amazon/chronos-bolt-tiny",
-    "context_length": 512,
-    "prediction_length": 64,
-    "input_patch_size": 16,
-    "input_patch_stride": 8,
-    "lr": 2e-4,
-    "batch_size": 4,
-    "max_steps": 1000,
-}
+accelerate launch --num_processes=4 --mixed_precision=fp16 src/scripts/train.py --config full_train
 ```
 
 ## Usage
@@ -108,15 +108,19 @@ GemmaTS/
 ├── src/
 │   ├── models/
 │   │   └── gemma_ts.py          # Main model (inherits ChronosBolt)
-│   ├── data/
-│   │   └── datamodule.py        # Dataset loading
+│   ├── configs/
+│   │   ├── test.py              # Test config
+│   │   └── full_train.py        # Full training config
+│   ├── dataloader/
+│   │   ├── data_loader.py       # Dataset classes
+│   │   └── data_factory.py      # Data provider
 │   ├── utils/
 │   │   ├── metrics.py           # MSE, MAE, sMAPE
 │   │   └── seed.py              # Reproducibility
 │   └── scripts/
 │       └── train.py             # Training script
 ├── data/
-│   ├── results/                 # Training logs (TSV)
+│   ├── datasets/                # Dataset files
 │   └── checkpoints/             # Saved models
 ├── requirements.txt
 └── README.md
