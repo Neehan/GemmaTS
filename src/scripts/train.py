@@ -42,11 +42,11 @@ class Config:
 
     # Model config
     seq_len: int = 512
-    label_len: int = 256
-    pred_len: int = 64
+    label_len: int = 128
+    pred_len: int = 96
 
     # Training config
-    batch_size: int = 4
+    batch_size: int = 64
     num_workers: int = 0
     lr: float = 2e-4
     num_train_epochs: int = 5
