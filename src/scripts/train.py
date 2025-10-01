@@ -74,7 +74,7 @@ class GemmaTSTrainer(Trainer):
         # Get median quantile prediction
         chronos_cfg = model.module.chronos_config if hasattr(model, "module") else model.chronos_config
         quantiles = chronos_cfg.quantiles
-        median_idx = quantiles.index(0.5) if 0.5 in quantiles else len(quantiles) // 2
+        median_idx = torch.abs(torch.tensor(quantiles) - 0.5).argmin()
         preds = outputs.quantile_preds[:, median_idx, :]
 
         # Compute MSE loss
@@ -96,7 +96,7 @@ class GemmaTSTrainer(Trainer):
 
         chronos_cfg = model.module.chronos_config if hasattr(model, "module") else model.chronos_config  # type: ignore[attr-defined,union-attr]
         quantiles = chronos_cfg.quantiles  # type: ignore[attr-defined]
-        median_idx = quantiles.index(0.5) if 0.5 in quantiles else len(quantiles) // 2  # type: ignore[arg-type]
+        median_idx = torch.abs(torch.tensor(quantiles) - 0.5).argmin()  # type: ignore[arg-type]
 
         for batch in eval_dataloader:
             batch = self._prepare_inputs(batch)

@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd  # type: ignore
 import torch
 from torch.utils.data import Dataset, DataLoader
+from sklearn.preprocessing import StandardScaler
 from src.utils.timefeatures import time_features
 import warnings
 
@@ -18,6 +19,7 @@ class Dataset_ETT_hour(Dataset):  # type: ignore[misc]
         features="S",
         data_path="ETTh1.csv",
         target="OT",
+        scale=True,
         timeenc=0,
         freq="h",
     ):
@@ -46,6 +48,7 @@ class Dataset_ETT_hour(Dataset):  # type: ignore[misc]
         self.__read_data__()
 
     def __read_data__(self):
+        self.scaler = StandardScaler()
         df_raw = pd.read_csv(os.path.join(self.root_path, self.data_path))
 
         border1s = [
@@ -67,7 +70,12 @@ class Dataset_ETT_hour(Dataset):  # type: ignore[misc]
         else:
             df_data = df_raw[[self.target]]
 
-        data = df_data.values
+        if self.scale:
+            train_data = df_data[border1s[0]:border2s[0]]
+            self.scaler.fit(train_data.values)
+            data = self.scaler.transform(df_data.values)
+        else:
+            data = df_data.values
 
         df_stamp = df_raw[["date"]][border1:border2]
         df_stamp["date"] = pd.to_datetime(df_stamp.date)  # type: ignore[attr-defined]
@@ -115,6 +123,7 @@ class Dataset_ETT_minute(Dataset):  # type: ignore[misc]
         features="S",
         data_path="ETTm1.csv",
         target="OT",
+        scale=True,
         timeenc=0,
         freq="t",
     ):
@@ -135,6 +144,7 @@ class Dataset_ETT_minute(Dataset):  # type: ignore[misc]
 
         self.features = features
         self.target = target
+        self.scale = scale
         self.timeenc = timeenc
         self.freq = freq
 
@@ -143,6 +153,7 @@ class Dataset_ETT_minute(Dataset):  # type: ignore[misc]
         self.__read_data__()
 
     def __read_data__(self):
+        self.scaler = StandardScaler()
         df_raw = pd.read_csv(os.path.join(self.root_path, self.data_path))
 
         border1s = [
@@ -164,7 +175,12 @@ class Dataset_ETT_minute(Dataset):  # type: ignore[misc]
         else:
             df_data = df_raw[[self.target]]
 
-        data = df_data.values
+        if self.scale:
+            train_data = df_data[border1s[0]:border2s[0]]
+            self.scaler.fit(train_data.values)
+            data = self.scaler.transform(df_data.values)
+        else:
+            data = df_data.values
 
         df_stamp = df_raw[["date"]][border1:border2]
         df_stamp["date"] = pd.to_datetime(df_stamp.date)  # type: ignore[attr-defined]
@@ -209,6 +225,7 @@ class Dataset_Custom(Dataset):  # type: ignore[misc]
         features="S",
         data_path="ETTh1.csv",
         target="OT",
+        scale=True,
         timeenc=0,
         freq="h",
     ):
@@ -229,6 +246,7 @@ class Dataset_Custom(Dataset):  # type: ignore[misc]
 
         self.features = features
         self.target = target
+        self.scale = scale
         self.timeenc = timeenc
         self.freq = freq
 
@@ -237,6 +255,7 @@ class Dataset_Custom(Dataset):  # type: ignore[misc]
         self.__read_data__()
 
     def __read_data__(self):
+        self.scaler = StandardScaler()
         df_raw = pd.read_csv(os.path.join(self.root_path, self.data_path))
 
         """
@@ -261,7 +280,12 @@ class Dataset_Custom(Dataset):  # type: ignore[misc]
         else:
             df_data = df_raw[[self.target]]
 
-        data = df_data.values  # type: ignore[attr-defined]
+        if self.scale:
+            train_data = df_data[border1s[0]:border2s[0]]
+            self.scaler.fit(train_data.values)
+            data = self.scaler.transform(df_data.values)
+        else:
+            data = df_data.values  # type: ignore[attr-defined]
 
         df_stamp = df_raw[["date"]][border1:border2]
         df_stamp["date"] = pd.to_datetime(df_stamp.date)  # type: ignore[attr-defined]
