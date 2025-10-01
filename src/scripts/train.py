@@ -121,12 +121,19 @@ class GemmaTSTrainer(Trainer):
             preds = outputs.quantile_preds[:, median_idx, :].cpu()  # type: ignore[attr-defined]
             target_cpu = batch["target"].cpu()
 
-            # Compute metrics on normalized scale (matching Chronos baseline)
-            loss = torch.nn.functional.mse_loss(preds, target_cpu)
+            # Inverse transform to raw scale for metrics
+            if scaler is not None:
+                preds_raw = torch.from_numpy(scaler.inverse_transform(preds.numpy()))
+                target_raw = torch.from_numpy(scaler.inverse_transform(target_cpu.numpy()))
+            else:
+                preds_raw = preds
+                target_raw = target_cpu
+
+            loss = torch.nn.functional.mse_loss(preds_raw, target_raw)
             all_losses.append(loss.item())
-            all_mse.append(mse(target_cpu, preds))
-            all_mae.append(mae(target_cpu, preds))
-            all_smape.append(smape(target_cpu, preds))
+            all_mse.append(mse(target_raw, preds_raw))
+            all_mae.append(mae(target_raw, preds_raw))
+            all_smape.append(smape(target_raw, preds_raw))
 
         metrics = {
             f"{metric_key_prefix}_loss": sum(all_losses) / len(all_losses),
