@@ -39,9 +39,10 @@ CONFIGS = {
 class TimeSeriesDataset(torch.utils.data.Dataset):
     """Wrapper to make dataloader compatible with HF Trainer."""
 
-    def __init__(self, dataset, pred_len):
+    def __init__(self, dataset, pred_len, scaler):
         self.dataset = dataset
         self.pred_len = pred_len
+        self.scaler = scaler
 
     def __len__(self):
         return len(self.dataset)
@@ -98,6 +99,9 @@ class GemmaTSTrainer(Trainer):
         quantiles = chronos_cfg.quantiles  # type: ignore[attr-defined]
         median_idx = torch.abs(torch.tensor(quantiles) - 0.5).argmin()  # type: ignore[arg-type]
 
+        # Get scaler from eval dataset
+        scaler = eval_dataset.dataset.scaler if eval_dataset else None  # type: ignore[union-attr]
+
         for batch in eval_dataloader:
             batch = self._prepare_inputs(batch)
 
@@ -112,11 +116,19 @@ class GemmaTSTrainer(Trainer):
             preds = outputs.quantile_preds[:, median_idx, :].cpu()  # type: ignore[attr-defined]
             target_cpu = batch["target"].cpu()
 
-            loss = torch.nn.functional.mse_loss(preds, target_cpu)
+            # Inverse transform to raw scale for metrics
+            if scaler is not None:
+                preds_raw = torch.from_numpy(scaler.inverse_transform(preds.numpy()))
+                target_raw = torch.from_numpy(scaler.inverse_transform(target_cpu.numpy()))
+            else:
+                preds_raw = preds
+                target_raw = target_cpu
+
+            loss = torch.nn.functional.mse_loss(preds_raw, target_raw)
             all_losses.append(loss.item())
-            all_mse.append(mse(target_cpu, preds))
-            all_mae.append(mae(target_cpu, preds))
-            all_smape.append(smape(target_cpu, preds))
+            all_mse.append(mse(target_raw, preds_raw))
+            all_mae.append(mae(target_raw, preds_raw))
+            all_smape.append(smape(target_raw, preds_raw))
 
         metrics = {
             f"{metric_key_prefix}_loss": sum(all_losses) / len(all_losses),
@@ -143,10 +155,10 @@ def main(config_name):
     val_dataset, _ = data_provider(config, flag="val")
     test_dataset, _ = data_provider(config, flag="test")
 
-    # Wrap datasets
-    train_ds = TimeSeriesDataset(train_dataset, config.pred_len)
-    val_ds = TimeSeriesDataset(val_dataset, config.pred_len)
-    test_ds = TimeSeriesDataset(test_dataset, config.pred_len)
+    # Wrap datasets - pass scaler for inverse transform
+    train_ds = TimeSeriesDataset(train_dataset, config.pred_len, train_dataset.scaler)
+    val_ds = TimeSeriesDataset(val_dataset, config.pred_len, val_dataset.scaler)
+    test_ds = TimeSeriesDataset(test_dataset, config.pred_len, test_dataset.scaler)
 
     logger.info(f"Train samples: {len(train_ds)}")
     logger.info(f"Val samples: {len(val_ds)}")
