@@ -19,7 +19,7 @@ class Config:
     # Model config
     seq_len: int = 512
     label_len: int = 128
-    pred_len: int = 96
+    pred_len: int = 64  # Chronos Bolt max prediction length is 64
 
     # Training config
     batch_size: int = 64

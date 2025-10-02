@@ -159,13 +159,18 @@ def create_gemma_ts(
     patch_stride: int = 8,
     text_prompt: Optional[str] = None,
 ):
-    """Create GemmaTS from Chronos config."""
+    """Create GemmaTS from Chronos config.
+
+    Note: This creates the model from scratch using the Chronos config as a template,
+    so we CAN change prediction_length here (unlike loading pretrained Chronos Bolt).
+    The output layer will be initialized with the correct size for the specified prediction_length.
+    """
     from transformers import AutoConfig
 
-    # Load Chronos config
+    # Load Chronos config as template
     config = AutoConfig.from_pretrained(chronos_base)
 
-    # Override settings
+    # Override settings - this is safe because we're creating from scratch
     config.chronos_config["context_length"] = context_length
     config.chronos_config["prediction_length"] = prediction_length
     config.chronos_config["input_patch_size"] = patch_size

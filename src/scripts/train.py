@@ -77,9 +77,8 @@ class GemmaTSTrainer(Trainer):
 
         outputs = model(context=context, mask=None, target=None, target_mask=None)
 
-        # Get median quantile prediction
-        chronos_cfg = model.module.chronos_config if hasattr(model, "module") else model.chronos_config
-        quantiles = chronos_cfg.quantiles
+        # Get median quantile prediction (0.5)
+        quantiles = model.chronos_config.quantiles
         median_idx = torch.abs(torch.tensor(quantiles) - 0.5).argmin()
         preds = outputs.quantile_preds[:, median_idx, :]
 
@@ -100,9 +99,8 @@ class GemmaTSTrainer(Trainer):
         all_mae = []
         all_smape = []
 
-        chronos_cfg = model.module.chronos_config if hasattr(model, "module") else model.chronos_config  # type: ignore[attr-defined,union-attr]
-        quantiles = chronos_cfg.quantiles  # type: ignore[attr-defined]
-        median_idx = torch.abs(torch.tensor(quantiles) - 0.5).argmin()  # type: ignore[arg-type]
+        quantiles = model.chronos_config.quantiles
+        median_idx = torch.abs(torch.tensor(quantiles) - 0.5).argmin()
 
         # Get scaler from eval dataset
         scaler = eval_dataset.dataset.scaler if eval_dataset else None  # type: ignore[union-attr]
@@ -121,19 +119,13 @@ class GemmaTSTrainer(Trainer):
             preds = outputs.quantile_preds[:, median_idx, :].cpu()  # type: ignore[attr-defined]
             target_cpu = batch["target"].cpu()
 
-            # Inverse transform to raw scale for metrics
-            if scaler is not None:
-                preds_raw = torch.from_numpy(scaler.inverse_transform(preds.numpy()))
-                target_raw = torch.from_numpy(scaler.inverse_transform(target_cpu.numpy()))
-            else:
-                preds_raw = preds
-                target_raw = target_cpu
-
-            loss = torch.nn.functional.mse_loss(preds_raw, target_raw)
+            # Compute metrics on normalized scale (same as PatchTST)
+            # This matches the reference implementation exactly
+            loss = torch.nn.functional.mse_loss(preds, target_cpu)
             all_losses.append(loss.item())
-            all_mse.append(mse(target_raw, preds_raw))
-            all_mae.append(mae(target_raw, preds_raw))
-            all_smape.append(smape(target_raw, preds_raw))
+            all_mse.append(mse(target_cpu, preds))
+            all_mae.append(mae(target_cpu, preds))
+            all_smape.append(smape(target_cpu, preds))
 
         metrics = {
             f"{metric_key_prefix}_loss": sum(all_losses) / len(all_losses),
@@ -149,7 +141,9 @@ class GemmaTSTrainer(Trainer):
 def main(config_name):
     """Main training loop."""
     if config_name not in CONFIGS:
-        raise ValueError(f"Unknown config: {config_name}. Available: {list(CONFIGS.keys())}")
+        raise ValueError(
+            f"Unknown config: {config_name}. Available: {list(CONFIGS.keys())}"
+        )
 
     config = CONFIGS[config_name]()
     set_seed(config.seed)

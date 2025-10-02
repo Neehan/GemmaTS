@@ -10,12 +10,31 @@ def create_chronos_bolt(
     patch_size: int,
     patch_stride: int,
 ):
-    """Create pure Chronos Bolt model from pretrained weights."""
+    """Create pure Chronos Bolt model from pretrained weights.
+
+    Note: Chronos Bolt models have a fixed prediction_length determined at training time.
+    For amazon/chronos-bolt-tiny, this is 64. The output layers are sized accordingly.
+    You cannot change prediction_length without retraining the output head.
+    """
     model = ChronosBoltModelForForecasting.from_pretrained(chronos_base)
 
+    # Verify the prediction_length matches the model's architecture
+    model_pred_len = model.chronos_config.prediction_length
+    if prediction_length != model_pred_len:
+        print(
+            f"WARNING: Requested prediction_length={prediction_length} but model supports {model_pred_len}"
+        )
+        print(f"Using model's native prediction_length={model_pred_len}")
+        prediction_length = model_pred_len
+
+    # Only update context_length and patch settings (these don't affect output layer size)
     model.config.chronos_config["context_length"] = context_length
-    model.config.chronos_config["prediction_length"] = prediction_length
+    model.chronos_config.context_length = context_length
+
     model.config.chronos_config["input_patch_size"] = patch_size
+    model.chronos_config.input_patch_size = patch_size
+
     model.config.chronos_config["input_patch_stride"] = patch_stride
+    model.chronos_config.input_patch_stride = patch_stride
 
     return model
