@@ -17,13 +17,15 @@ from transformers.training_args import TrainingArguments
 
 from src.models.gemma_ts import create_gemma_ts
 from src.models.chronos_bolt import create_chronos_bolt
+from src.models.patchtst import create_patchtst
 from src.dataloader.data_factory import data_provider
-from src.utils.metrics import mse, mae, smape
+from src.utils.metrics import mse, mae
 from src.utils.seed import set_seed
 from src.configs.test import Config as TestConfig
 from src.configs.full_train import Config as FullTrainConfig
 from src.configs.chronos import Config as ChronosConfig
 from src.configs.chronos_test import Config as ChronosTestConfig
+from src.configs.patchtst import Config as PatchTSTConfig
 
 # Setup logging
 logging.basicConfig(
@@ -38,6 +40,7 @@ CONFIGS = {
     "full_train": FullTrainConfig,
     "chronos": ChronosConfig,
     "chronos_test": ChronosTestConfig,
+    "patchtst": PatchTSTConfig,  # pred_len=64 to match Chronos Bolt
 }
 
 
@@ -68,7 +71,15 @@ class TimeSeriesDataset(torch.utils.data.Dataset):
 
 
 class GemmaTSTrainer(Trainer):
-    """Custom Trainer for GemmaTS."""
+    """Custom Trainer for time series models."""
+
+    def __init__(self, model_type, *args, **kwargs):
+        """
+        Args:
+            model_type: One of 'chronos', 'patchtst', or 'gemma'
+        """
+        super().__init__(*args, **kwargs)
+        self.model_type = model_type
 
     def _get_unwrapped_model(self, model):
         """Get the underlying model from DataParallel/DistributedDataParallel wrapper."""
@@ -81,11 +92,14 @@ class GemmaTSTrainer(Trainer):
 
         outputs = model(context=context, mask=None, target=None, target_mask=None)
 
-        # Get median quantile prediction (0.5)
-        unwrapped_model = self._get_unwrapped_model(model)
-        quantiles = unwrapped_model.chronos_config.quantiles
-        median_idx = torch.abs(torch.tensor(quantiles) - 0.5).argmin()
-        preds = outputs.quantile_preds[:, median_idx, :]
+        # Get predictions based on model type
+        if self.model_type == "patchtst":
+            preds = outputs.predictions
+        else:  # chronos or gemma
+            unwrapped_model = self._get_unwrapped_model(model)
+            quantiles = unwrapped_model.chronos_config.quantiles
+            median_idx = torch.abs(torch.tensor(quantiles) - 0.5).argmin()
+            preds = outputs.quantile_preds[:, median_idx, :]
 
         # Compute MSE loss
         loss = torch.nn.functional.mse_loss(preds, target)
@@ -102,14 +116,12 @@ class GemmaTSTrainer(Trainer):
         all_losses = []
         all_mse = []
         all_mae = []
-        all_smape = []
 
-        unwrapped_model = self._get_unwrapped_model(model)
-        quantiles = unwrapped_model.chronos_config.quantiles
-        median_idx = torch.abs(torch.tensor(quantiles) - 0.5).argmin()
-
-        # Get scaler from eval dataset
-        scaler = eval_dataset.dataset.scaler if eval_dataset else None  # type: ignore[union-attr]
+        # Setup for quantile models
+        if self.model_type != "patchtst":
+            unwrapped_model = self._get_unwrapped_model(model)
+            quantiles = unwrapped_model.chronos_config.quantiles
+            median_idx = torch.abs(torch.tensor(quantiles) - 0.5).argmin()
 
         for batch in eval_dataloader:
             batch = self._prepare_inputs(batch)
@@ -122,22 +134,25 @@ class GemmaTSTrainer(Trainer):
                     target_mask=None,
                 )
 
-            preds = outputs.quantile_preds[:, median_idx, :].cpu()  # type: ignore[attr-defined]
+            # Get predictions based on model type
+            if self.model_type == "patchtst":
+                preds = outputs.predictions.cpu()
+            else:  # chronos or gemma
+                preds = outputs.quantile_preds[:, median_idx, :].cpu()
+
             target_cpu = batch["target"].cpu()
 
             # Compute metrics on normalized scale (same as PatchTST)
-            # This matches the reference implementation exactly
+            # PatchTST only reports MSE and MAE on normalized data
             loss = torch.nn.functional.mse_loss(preds, target_cpu)
             all_losses.append(loss.item())
             all_mse.append(mse(target_cpu, preds))
             all_mae.append(mae(target_cpu, preds))
-            all_smape.append(smape(target_cpu, preds))
 
         metrics = {
             f"{metric_key_prefix}_loss": sum(all_losses) / len(all_losses),
             f"{metric_key_prefix}_mse": sum(all_mse) / len(all_mse),
             f"{metric_key_prefix}_mae": sum(all_mae) / len(all_mae),
-            f"{metric_key_prefix}_smape": sum(all_smape) / len(all_smape),
         }
 
         self.log(metrics)
@@ -179,6 +194,22 @@ def main(config_name):
             patch_size=config.input_patch_size,
             patch_stride=config.input_patch_stride,
         )
+    elif config_name == "patchtst":
+        logger.info("Initializing PatchTST baseline model...")
+        model = create_patchtst(
+            seq_len=config.seq_len,
+            pred_len=config.pred_len,
+            enc_in=config.enc_in,
+            e_layers=config.e_layers,
+            n_heads=config.n_heads,
+            d_model=config.d_model,
+            d_ff=config.d_ff,
+            dropout=config.dropout,
+            fc_dropout=config.fc_dropout,
+            head_dropout=config.head_dropout,
+            patch_len=config.patch_len,
+            stride=config.stride,
+        )
     else:
         logger.info("Initializing GemmaTS model...")
         model = create_gemma_ts(
@@ -214,8 +245,17 @@ def main(config_name):
         seed=config.seed,
     )
 
+    # Determine model type
+    if config_name in ["chronos", "chronos_test"]:
+        model_type = "chronos"
+    elif config_name == "patchtst":
+        model_type = "patchtst"
+    else:
+        model_type = "gemma"
+
     # Initialize trainer
     trainer = GemmaTSTrainer(
+        model_type=model_type,
         model=model,
         args=training_args,
         train_dataset=train_ds,
@@ -230,6 +270,76 @@ def main(config_name):
     logger.info("Final evaluation on test set...")
     test_metrics = trainer.evaluate(eval_dataset=test_ds, metric_key_prefix="test")
     logger.info(f"Test metrics: {test_metrics}")
+
+    # Save results
+    import json
+    import numpy as np
+
+    results_dir = os.path.join("data/results", config_name)
+    os.makedirs(results_dir, exist_ok=True)
+
+    # Save metrics as JSON
+    metrics_file = os.path.join(results_dir, "test_metrics.json")
+    with open(metrics_file, "w") as f:
+        json.dump(test_metrics, f, indent=2)
+    logger.info(f"Saved test metrics to {metrics_file}")
+
+    # Save metrics as text for easy viewing
+    results_txt = os.path.join(results_dir, "results.txt")
+    with open(results_txt, "w") as f:
+        f.write(f"Configuration: {config_name}\n")
+        f.write(f"Model: {type(model).__name__}\n")
+        f.write(f"Dataset: {config.data} (features={config.features})\n")
+        f.write(f"seq_len={config.seq_len}, pred_len={config.pred_len}\n")
+        f.write("\n" + "=" * 50 + "\n")
+        f.write("Test Set Results (Normalized Scale)\n")
+        f.write("=" * 50 + "\n")
+        for key, value in test_metrics.items():
+            if key != "epoch":
+                f.write(f"{key}: {value:.6f}\n")
+    logger.info(f"Saved results summary to {results_txt}")
+
+    # Save predictions (optional, can be large)
+    save_predictions = os.getenv("SAVE_PREDICTIONS", "false").lower() == "true"
+    if save_predictions:
+        logger.info("Saving predictions...")
+        all_preds = []
+        all_targets = []
+
+        model.eval()  # type: ignore[union-attr]
+        test_dataloader = trainer.get_test_dataloader(test_ds)
+
+        # Setup for quantile models
+        if model_type != "patchtst":
+            unwrapped_model = trainer._get_unwrapped_model(model)  # type: ignore[attr-defined]
+            quantiles = unwrapped_model.chronos_config.quantiles
+            median_idx = torch.abs(torch.tensor(quantiles) - 0.5).argmin()
+
+        for batch in test_dataloader:
+            batch = trainer._prepare_inputs(batch)
+            with torch.no_grad():
+                outputs = model(  # type: ignore[misc]
+                    context=batch["context"],
+                    mask=None,
+                    target=None,
+                    target_mask=None,
+                )
+
+            # Get predictions based on model type
+            if model_type == "patchtst":
+                preds = outputs.predictions.cpu().numpy()
+            else:  # chronos or gemma
+                preds = outputs.quantile_preds[:, median_idx, :].cpu().numpy()
+
+            all_preds.append(preds)
+            all_targets.append(batch["target"].cpu().numpy())
+
+        all_preds = np.concatenate(all_preds, axis=0)
+        all_targets = np.concatenate(all_targets, axis=0)
+
+        np.save(os.path.join(results_dir, "predictions.npy"), all_preds)
+        np.save(os.path.join(results_dir, "targets.npy"), all_targets)
+        logger.info(f"Saved predictions to {results_dir}")
 
     # Save final model
     trainer.save_model(os.path.join(config.output_dir, "final_model"))

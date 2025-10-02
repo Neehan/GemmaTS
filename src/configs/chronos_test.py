@@ -24,7 +24,7 @@ class Config:
     # Training config
     batch_size: int = 2
     num_workers: int = 0
-    lr: float = 2e-4
+    lr: float = 1e-4
     num_train_epochs: int = 1
     max_steps: int = 10
     eval_steps: int = 5
