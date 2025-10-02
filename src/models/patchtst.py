@@ -1,17 +1,8 @@
 """PatchTST baseline model for comparison."""
 
-import sys
-import os
-
-# Add PatchTST_supervised to path
-patchtst_path = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "PatchTST_supervised"
-)
-sys.path.insert(0, patchtst_path)
-
 import torch
 import torch.nn as nn
-from models.PatchTST import Model as PatchTST_Model
+from PatchTST_supervised.models.PatchTST import Model as PatchTST_Model
 
 
 class PatchTSTWrapper(nn.Module):
