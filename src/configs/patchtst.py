@@ -1,25 +1,15 @@
-"""PatchTST configuration for pred_len=64 (to match Chronos Bolt)."""
+"""PatchTST configuration."""
 
 from dataclasses import dataclass
+from src.configs.base.etth1 import ETTh1BaseConfig
 
 
 @dataclass
-class Config:
-    """Configuration for PatchTST baseline with pred_len=64."""
+class Config(ETTh1BaseConfig):
+    """Configuration for PatchTST baseline.
 
-    # Data config
-    data: str = "ETTh1"
-    root_path: str = "data/datasets/ETT-small/"
-    data_path: str = "ETTh1.csv"
-    features: str = "S"  # Univariate
-    target: str = "OT"
-    freq: str = "h"
-    embed: str = "timeF"
-
-    # Model config
-    seq_len: int = 512  # Match Chronos context length
-    label_len: int = 0  # Not used in PatchTST
-    pred_len: int = 64  # Match Chronos Bolt prediction length
+    Inherits common ETTh1 settings, only defines PatchTST-specific architecture.
+    """
 
     # PatchTST architecture (from paper Table 13 - ETTh1 univariate)
     enc_in: int = 1  # Univariate
@@ -40,17 +30,5 @@ class Config:
     kernel_size: int = 25
     padding_patch: str = "end"
 
-    # Training config
-    batch_size: int = 64
-    num_workers: int = 0
-    lr: float = 1e-4
-    num_train_epochs: int = 20
-    max_steps: int = -1
-    eval_steps: int = 500
-    save_steps: int = 500
-    warmup_steps: int = 100
-    logging_steps: int = 50
-
-    # Paths
-    output_dir: str = "data/checkpoints/patchtst_etth1_64"
-    seed: int = 42
+    # Output path
+    output_dir: str = "data/checkpoints/patchtst_etth1"
