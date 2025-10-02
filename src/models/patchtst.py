@@ -2,7 +2,7 @@
 
 import torch
 import torch.nn as nn
-from PatchTST_supervised.models.PatchTST import Model as PatchTST_Model
+from src.models.patchtst_modules import PatchTSTModel as PatchTST_Model
 
 
 class PatchTSTWrapper(nn.Module):
