@@ -70,6 +70,10 @@ class TimeSeriesDataset(torch.utils.data.Dataset):
 class GemmaTSTrainer(Trainer):
     """Custom Trainer for GemmaTS."""
 
+    def _get_unwrapped_model(self, model):
+        """Get the underlying model from DataParallel/DistributedDataParallel wrapper."""
+        return model.module if hasattr(model, "module") else model
+
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):  # type: ignore[override]
         """Compute loss for training."""
         context = inputs["context"]
@@ -78,7 +82,8 @@ class GemmaTSTrainer(Trainer):
         outputs = model(context=context, mask=None, target=None, target_mask=None)
 
         # Get median quantile prediction (0.5)
-        quantiles = model.chronos_config.quantiles
+        unwrapped_model = self._get_unwrapped_model(model)
+        quantiles = unwrapped_model.chronos_config.quantiles
         median_idx = torch.abs(torch.tensor(quantiles) - 0.5).argmin()
         preds = outputs.quantile_preds[:, median_idx, :]
 
@@ -99,7 +104,8 @@ class GemmaTSTrainer(Trainer):
         all_mae = []
         all_smape = []
 
-        quantiles = model.chronos_config.quantiles
+        unwrapped_model = self._get_unwrapped_model(model)
+        quantiles = unwrapped_model.chronos_config.quantiles
         median_idx = torch.abs(torch.tensor(quantiles) - 0.5).argmin()
 
         # Get scaler from eval dataset
