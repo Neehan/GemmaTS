@@ -2,7 +2,21 @@
 
 import torch
 import torch.nn as nn
+from dataclasses import dataclass
+from typing import Optional
 from src.models.patchtst_modules import PatchTSTModel as PatchTST_Model
+
+
+@dataclass
+class PatchTSTOutput:
+    """Output object matching Chronos interface. Compatible with DataParallel."""
+
+    predictions: torch.Tensor
+    loss: Optional[torch.Tensor] = None
+
+    def __iter__(self):
+        """Make iterable for DataParallel compatibility."""
+        return iter((self.predictions, self.loss))
 
 
 class PatchTSTWrapper(nn.Module):
@@ -33,15 +47,8 @@ class PatchTSTWrapper(nn.Module):
         # Forward through PatchTST
         output = self.model(x)  # (batch, pred_len, n_features)
 
-        # Return dict matching our interface
+        # Return output object
         return PatchTSTOutput(predictions=output.squeeze(-1))
-
-
-class PatchTSTOutput:
-    """Output object matching Chronos interface."""
-
-    def __init__(self, predictions):
-        self.predictions = predictions
 
 
 class PatchTSTConfig:
