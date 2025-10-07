@@ -274,6 +274,10 @@ def create_gemma_ts(
         for param in model.output_patch_embedding.parameters():
             param.requires_grad = True
 
+        # unfreeze encoder's last layer
+        for param in model.encoder.block[-1].parameters():
+            param.requires_grad = True
+
         # unfreeze last Gemma MLP
         # for name, param in model.gemma.layers[-1].self_attn.named_parameters():
         #     if any(k in name for k in ["q_proj", "v_proj"]):
