@@ -41,7 +41,7 @@ class GemmaTS(ChronosBoltModelForForecasting):
         hf_token = os.getenv("HF_TOKEN")
         dtype = torch.bfloat16 if use_bfloat16 else torch.float32
         gemma = AutoModelForCausalLM.from_pretrained(
-            model_name, torch_dtype=dtype, token=hf_token
+            model_name, dtype=dtype, token=hf_token
         )
 
         # Detect model type and extract the text model
@@ -207,9 +207,8 @@ def create_gemma_ts(
         for param in model.output_patch_embedding.parameters():
             param.requires_grad = True
 
-        # unfreeze last Gemma layer
-        print(model.gemma.layers)
-        # for param in model.gemma.layers[-1].parameters():
-        #     param.requires_grad = True
+        # unfreeze last Gemma MLP
+        for param in model.gemma.layers[-1].mlp.parameters():
+            param.requires_grad = True
 
     return model
