@@ -275,7 +275,7 @@ def create_gemma_ts(
             param.requires_grad = True
 
         # unfreeze encoder's last layer
-        for param in model.encoder.block[-1].parameters():
+        for param in model.encoder.parameters():
             param.requires_grad = True
 
         # unfreeze last Gemma MLP
