@@ -22,7 +22,7 @@ class Config(ETTh1BaseConfig):
     freeze: bool = True
 
     # Loss function
-    loss_fn: str = "quantile"
+    loss_fn: str = "mse"
 
     # Output path
     output_dir: str = "data/checkpoints/gemma_ts_etth1"

@@ -11,6 +11,9 @@ load_dotenv()
 # Disable tokenizer parallelism warning
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+# Save results
+import json
+import numpy as np
 import torch
 from transformers.trainer import Trainer
 from transformers.training_args import TrainingArguments
@@ -280,10 +283,6 @@ def main(config_name):
     logger.info("Final evaluation on test set...")
     test_metrics = trainer.evaluate(eval_dataset=test_ds, metric_key_prefix="test")
     logger.info(f"Test metrics: {test_metrics}")
-
-    # Save results
-    import json
-    import numpy as np
 
     results_dir = os.path.join("data/results", config_name)
     os.makedirs(results_dir, exist_ok=True)
