@@ -85,28 +85,14 @@ class GemmaTS(ChronosBoltModelForForecasting):
                 B, -1, -1
             )  # (B, num_prompt_tokens, dim)
 
-            # Concatenate: [prompt, time_series, bos]
-            combined = torch.cat([prompt_embeds, h, bos_embed], dim=1)
-
-            # Create attention mask for all tokens
-            num_prompt_tokens = prompt_embeds.shape[1]
-            prompt_mask = torch.ones(
-                B, num_prompt_tokens, device=device, dtype=attention_mask.dtype
-            )
-            bos_mask = torch.ones(B, 1, device=device, dtype=attention_mask.dtype)
-            full_mask = torch.cat([prompt_mask, attention_mask, bos_mask], dim=1)
+            # Concatenate: [bos, prompt, time_series]
+            combined = torch.cat([bos_embed, prompt_embeds, h], dim=1)
         else:
-            # No prompt: just [time_series, bos]
-            combined = torch.cat([h, bos_embed], dim=1)
+            # No prompt: just [bos, time_series]
+            combined = torch.cat([bos_embed, h], dim=1)
 
-            # Create attention mask
-            bos_mask = torch.ones(B, 1, device=device, dtype=attention_mask.dtype)
-            full_mask = torch.cat([attention_mask, bos_mask], dim=1)
-
-        # Pass through Gemma
-        out = self.gemma(
-            inputs_embeds=combined, attention_mask=full_mask, return_dict=True
-        )
+        # Pass through Gemma - no attention mask needed, attend to all embeddings
+        out = self.gemma(inputs_embeds=combined, return_dict=True)
 
         # Get last token's hidden state
         last = out.last_hidden_state[:, -1:, :]
@@ -183,6 +169,9 @@ def create_gemma_ts(
             param.requires_grad = True
 
         for param in model.gemma_to_dec.parameters():
+            param.requires_grad = True
+
+        for param in model.output_patch_embedding.parameters():
             param.requires_grad = True
 
     return model

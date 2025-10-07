@@ -113,9 +113,8 @@ class GemmaTSTrainer(Trainer):
         model = self.model
         model.eval()  # type: ignore[union-attr]
 
-        all_losses = []
-        all_mse = []
-        all_mae = []
+        all_preds = []
+        all_targets = []
 
         # Setup for quantile models
         if self.model_type != "patchtst":
@@ -136,23 +135,26 @@ class GemmaTSTrainer(Trainer):
 
             # Get predictions based on model type
             if self.model_type == "patchtst":
-                preds = outputs.predictions.cpu()
+                preds = outputs.predictions
             else:  # chronos
-                preds = outputs.quantile_preds[:, median_idx, :].cpu()
+                preds = outputs.quantile_preds[:, median_idx, :]
 
-            target_cpu = batch["target"].cpu()
+            all_preds.append(preds)
+            all_targets.append(batch["target"])
 
-            # Compute metrics on normalized scale (same as PatchTST)
-            # PatchTST only reports MSE and MAE on normalized data
-            loss = torch.nn.functional.mse_loss(preds, target_cpu)
-            all_losses.append(loss.item())
-            all_mse.append(mse(target_cpu, preds))
-            all_mae.append(mae(target_cpu, preds))
+        # Move to CPU once at the end
+        all_preds = torch.cat(all_preds, dim=0).cpu()
+        all_targets = torch.cat(all_targets, dim=0).cpu()
+
+        # Compute metrics on normalized scale
+        loss = torch.nn.functional.mse_loss(all_preds, all_targets)
+        mse_val = mse(all_targets, all_preds)
+        mae_val = mae(all_targets, all_preds)
 
         metrics = {
-            f"{metric_key_prefix}_loss": sum(all_losses) / len(all_losses),
-            f"{metric_key_prefix}_mse": sum(all_mse) / len(all_mse),
-            f"{metric_key_prefix}_mae": sum(all_mae) / len(all_mae),
+            f"{metric_key_prefix}_loss": loss.item(),
+            f"{metric_key_prefix}_mse": mse_val,
+            f"{metric_key_prefix}_mae": mae_val,
         }
 
         self.log(metrics)
@@ -329,15 +331,16 @@ def main(config_name):
 
             # Get predictions based on model type
             if model_type == "patchtst":
-                preds = outputs.predictions.cpu().numpy()
+                preds = outputs.predictions
             else:  # chronos or gemma
-                preds = outputs.quantile_preds[:, median_idx, :].cpu().numpy()
+                preds = outputs.quantile_preds[:, median_idx, :]
 
             all_preds.append(preds)
-            all_targets.append(batch["target"].cpu().numpy())
+            all_targets.append(batch["target"])
 
-        all_preds = np.concatenate(all_preds, axis=0)
-        all_targets = np.concatenate(all_targets, axis=0)
+        # Move to CPU once at the end
+        all_preds = torch.cat(all_preds, dim=0).cpu().numpy()
+        all_targets = torch.cat(all_targets, dim=0).cpu().numpy()
 
         np.save(os.path.join(results_dir, "predictions.npy"), all_preds)
         np.save(os.path.join(results_dir, "targets.npy"), all_targets)
