@@ -58,6 +58,8 @@ class GemmaTS(ChronosBoltModelForForecasting):
         # Get BOS token from generation_config (most reliable)
         self.bos_token_id = gemma.generation_config.bos_token_id
         if self.bos_token_id is None:
+            self.bos_token_id = gemma.config.bos_token_id
+        if self.bos_token_id is None:
             raise ValueError("BOS token ID not found in generation_config")
 
         # Optional: Set up text prompt if provided
@@ -189,7 +191,7 @@ def create_gemma_ts(
 
     # Convert entire model to bfloat16 if configured
     if use_bfloat16:
-        model = model.to(torch.bfloat16)
+        model = model.to(torch.bfloat16)  # type: ignore
 
     if freeze:
         for param in model.parameters():
