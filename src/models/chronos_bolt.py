@@ -9,6 +9,7 @@ def create_chronos_bolt(
     prediction_length: int,
     patch_size: int,
     patch_stride: int,
+    freeze: bool = True,
 ):
     """Create pure Chronos Bolt model from pretrained weights.
 
@@ -37,11 +38,8 @@ def create_chronos_bolt(
     model.config.chronos_config["input_patch_stride"] = patch_stride
     model.chronos_config.input_patch_stride = patch_stride
 
-    # Freeze pretrained encoder and decoder, keep output head trainable
-    for param in model.encoder.parameters():
-        param.requires_grad = False
-
-    for param in model.decoder.parameters():
-        param.requires_grad = False
+    if freeze:
+        for param in model.parameters():
+            param.requires_grad = False
 
     return model

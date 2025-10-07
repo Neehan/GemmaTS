@@ -208,4 +208,9 @@ __marimo__/
 
 data/*
 *.DS_Store
-# PatchTST_supervised/*
+
+# PatchTST_supervised output files (keep source code, ignore outputs)
+PatchTST_supervised/checkpoints/
+PatchTST_supervised/results/
+PatchTST_supervised/test_results/
+PatchTST_supervised/*.txt

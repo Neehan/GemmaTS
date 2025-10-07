@@ -53,12 +53,8 @@ class GemmaTS(ChronosBoltModelForForecasting):
             raise ValueError("BOS token ID is not set for Gemma model")
 
         # Projection layers (trainable)
-        if gemma_dim != self.model_dim:
-            self.enc_to_gemma = nn.Linear(self.model_dim, gemma_dim)
-            self.gemma_to_dec = nn.Linear(gemma_dim, self.model_dim)
-        else:
-            self.enc_to_gemma = nn.Identity()
-            self.gemma_to_dec = nn.Identity()
+        self.enc_to_gemma = nn.Linear(self.model_dim, gemma_dim)
+        self.gemma_to_dec = nn.Linear(gemma_dim, self.model_dim)
 
     def decode(
         self, input_embeds, attention_mask, hidden_states, output_attentions=False
@@ -159,6 +155,7 @@ def create_gemma_ts(
     patch_size: int = 16,
     patch_stride: int = 8,
     text_prompt: Optional[str] = None,
+    freeze: bool = True,
 ):
     """Create GemmaTS from Chronos config.
 
@@ -178,10 +175,14 @@ def create_gemma_ts(
 
     model = GemmaTS(config, gemma_model, text_prompt)
 
-    for param in model.encoder.parameters():
-        param.requires_grad = False
+    if freeze:
+        for param in model.parameters():
+            param.requires_grad = False
 
-    for param in model.gemma.parameters():
-        param.requires_grad = False
+        for param in model.enc_to_gemma.parameters():
+            param.requires_grad = True
+
+        for param in model.gemma_to_dec.parameters():
+            param.requires_grad = True
 
     return model

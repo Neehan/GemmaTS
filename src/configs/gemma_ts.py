@@ -19,6 +19,7 @@ class Config(ETTh1BaseConfig):
     input_patch_size: int = 16
     input_patch_stride: int = 8
     text_prompt: str = "Predict the next values in this time series:"
+    freeze: bool = True
 
     # Training - longer for full model
     num_train_epochs: int = 100
