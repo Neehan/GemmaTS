@@ -15,6 +15,7 @@ class GemmaTSOutput(ChronosBoltOutput):
     """Extended output with encoder hidden states."""
 
     encoder_hidden_states: Optional[torch.Tensor] = None
+    projected_hidden_states: Optional[torch.Tensor] = None
 
 
 class GemmaTS(ChronosBoltModelForForecasting):
@@ -176,7 +177,7 @@ class GemmaTS(ChronosBoltModelForForecasting):
         return GemmaTSOutput(
             loss=loss,
             quantile_preds=quantile_preds,
-            encoder_hidden_states=hidden_states,
+            projected_hidden_states=self._projected_hidden_states,
         )
 
     def decode(
@@ -192,6 +193,7 @@ class GemmaTS(ChronosBoltModelForForecasting):
 
         # Project encoder outputs (time series) to Gemma dimension
         h = self.enc_to_gemma(hidden_states)  # (B, seq_len, dim)
+        self._projected_hidden_states = h
 
         # Get BOS token embedding
         bos_ids = torch.tensor([self.bos_token_id], device=device)
