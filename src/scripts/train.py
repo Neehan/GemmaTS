@@ -121,8 +121,8 @@ class GemmaTSTrainer(Trainer):
             loss = self._compute_chronos_loss(outputs, target, unwrapped_model)
 
             projected = outputs.projected_hidden_states
-            align_loss = alignment_loss(projected, unwrapped_model.numeric_embedding)
-            loss = loss + 0.1 * align_loss
+            # align_loss = alignment_loss(projected, unwrapped_model.numeric_embedding)
+            loss = loss  # + 0.1 * align_loss
 
         elif self.model_type == "chronos":
             outputs = model(context=context, mask=None, target=None, target_mask=None)
