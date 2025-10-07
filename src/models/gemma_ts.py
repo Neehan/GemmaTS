@@ -209,7 +209,7 @@ def create_gemma_ts(
 
         # unfreeze last Gemma layer
         # print(model.gemma.layers)
-        # for param in model.gemma.layers[-1].parameters():
-        #     param.requires_grad = True
+        for param in model.gemma.layers[-1].parameters():
+            param.requires_grad = True
 
     return model
