@@ -75,11 +75,11 @@ class GemmaTS(ChronosBoltModelForForecasting):
         # Projection layers (trainable)
         self.enc_to_gemma = nn.Sequential(
             nn.Linear(self.model_dim, gemma_dim),
-            nn.LayerNorm(gemma_dim),
+            nn.RMSNorm(gemma_dim),
         )
         self.gemma_to_dec = nn.Sequential(
             nn.Linear(gemma_dim, self.model_dim),
-            nn.LayerNorm(self.model_dim),
+            nn.RMSNorm(self.model_dim),
         )
 
     def decode(
@@ -208,8 +208,8 @@ def create_gemma_ts(
             param.requires_grad = True
 
         # unfreeze last Gemma MLP
-        for name, param in model.gemma.layers[-1].self_attn.named_parameters():
-            if any(k in name for k in ["q_proj", "v_proj"]):
-                param.requires_grad = True
+        # for name, param in model.gemma.layers[-1].self_attn.named_parameters():
+        #     if any(k in name for k in ["q_proj", "v_proj"]):
+        #         param.requires_grad = True
 
     return model
