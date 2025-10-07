@@ -33,10 +33,16 @@ class GemmaTS(ChronosBoltModelForForecasting):
         gemma = AutoModelForCausalLM.from_pretrained(
             model_name, torch_dtype=torch.float32, token=hf_token
         )
-        self.gemma = gemma.model
 
-        # Get hidden dimension from the embedding layer (most reliable)
-        gemma_dim = self.gemma.embed_tokens.weight.shape[1]
+        # Handle two Gemma architectures
+        if hasattr(gemma, "language_model"):
+            # Gemma3ForConditionalGeneration (4B+) - multimodal
+            self.gemma = gemma.language_model
+            gemma_dim = gemma.config.text_config.hidden_size
+        else:
+            # Gemma3ForCausalLM (1B or less)
+            self.gemma = gemma.model
+            gemma_dim = gemma.config.hidden_size
 
         # Optional: Set up text prompt if provided
         if text_prompt is not None:
@@ -52,6 +58,9 @@ class GemmaTS(ChronosBoltModelForForecasting):
         self.bos_token_id = gemma.config.bos_token_id
         if self.bos_token_id is None:
             raise ValueError("BOS token ID is not set for Gemma model")
+
+        # Get embedding function - Gemma3 uses token_embeddings
+        self.get_embeddings = lambda ids: self.gemma.embeddings.token_embeddings(ids)
 
         # Projection layers (trainable)
         self.enc_to_gemma = nn.Linear(self.model_dim, gemma_dim)
@@ -72,16 +81,15 @@ class GemmaTS(ChronosBoltModelForForecasting):
         h = self.enc_to_gemma(hidden_states)  # (B, seq_len, dim)
 
         # Get BOS token embedding
-        bos_embed = self.gemma.embed_tokens.weight[self.bos_token_id]
-        bos_embed = bos_embed.unsqueeze(0).unsqueeze(0).expand(B, -1, -1)  # (B, 1, dim)
+        bos_ids = torch.tensor([self.bos_token_id], device=device)
+        bos_embed = self.get_embeddings(bos_ids)  # (1, dim)
+        bos_embed = bos_embed.unsqueeze(0).expand(B, -1, -1)  # (B, 1, dim)
 
         # Conditionally add text prompt if configured
         if self.prompt_ids is not None:
             # Get prompt embeddings
             prompt_ids = self.prompt_ids.to(device)
-            prompt_embeds = self.gemma.embed_tokens(
-                prompt_ids
-            )  # (num_prompt_tokens, dim)
+            prompt_embeds = self.get_embeddings(prompt_ids)  # (num_prompt_tokens, dim)
             prompt_embeds = prompt_embeds.unsqueeze(0).expand(
                 B, -1, -1
             )  # (B, num_prompt_tokens, dim)
