@@ -42,4 +42,8 @@ def create_chronos_bolt(
         for param in model.parameters():
             param.requires_grad = False
 
+        # output layer params
+        for param in model.output_patch_embedding.parameters():
+            param.requires_grad = True
+
     return model
