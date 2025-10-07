@@ -44,20 +44,24 @@ class GemmaTS(ChronosBoltModelForForecasting):
             self.gemma = gemma.model
             gemma_dim = gemma.config.hidden_size
 
+        # Load tokenizer for BOS token and optional text prompt
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, token=hf_token)
+
+        # Store BOS token ID - get from config or tokenizer
+        self.bos_token_id = gemma.config.bos_token_id
+        if self.bos_token_id is None:
+            self.bos_token_id = self.tokenizer.bos_token_id
+        if self.bos_token_id is None:
+            raise ValueError("BOS token ID is not available in config or tokenizer")
+
         # Optional: Set up text prompt if provided
         if text_prompt is not None:
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name, token=hf_token)
             prompt_tokens = self.tokenizer(
                 text_prompt, return_tensors="pt", add_special_tokens=False
             )
             self.prompt_ids = prompt_tokens.input_ids[0]  # Shape: (num_tokens,)
         else:
             self.prompt_ids = None
-
-        # Store BOS token ID
-        self.bos_token_id = gemma.config.bos_token_id
-        if self.bos_token_id is None:
-            raise ValueError("BOS token ID is not set for Gemma model")
 
         # Get embedding function - Gemma3 uses token_embeddings
         self.get_embeddings = lambda ids: self.gemma.embeddings.token_embeddings(ids)
