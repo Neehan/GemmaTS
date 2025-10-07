@@ -74,15 +74,11 @@ class GemmaTS(ChronosBoltModelForForecasting):
 
         # Projection layers (trainable)
         self.enc_to_gemma = nn.Sequential(
-            nn.Linear(self.model_dim, 2 * gemma_dim),
-            nn.GELU(),
-            nn.Linear(2 * gemma_dim, gemma_dim),
+            nn.Linear(self.model_dim, gemma_dim),
             nn.LayerNorm(gemma_dim),
         )
         self.gemma_to_dec = nn.Sequential(
-            nn.Linear(gemma_dim, 2 * self.model_dim),
-            nn.GELU(),
-            nn.Linear(2 * self.model_dim, self.model_dim),
+            nn.Linear(gemma_dim, self.model_dim),
             nn.LayerNorm(self.model_dim),
         )
 
@@ -210,5 +206,10 @@ def create_gemma_ts(
         # output layer params
         for param in model.output_patch_embedding.parameters():
             param.requires_grad = True
+
+        # unfreeze last Gemma layer
+        print(model.gemma.layers)
+        # for param in model.gemma.layers[-1].parameters():
+        #     param.requires_grad = True
 
     return model
