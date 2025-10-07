@@ -100,29 +100,35 @@ class GemmaTS(ChronosBoltModelForForecasting):
 
     def _compute_numeric_embedding(self, tokenizer):
         """Compute average embedding of numeric tokens from Gemma."""
-        numeric_tokens = tokenizer(
-            [
-                "0",
-                "1",
-                "2",
-                "3",
-                "4",
-                "5",
-                "6",
-                "7",
-                "8",
-                "9",
-                ".",
-                "-",
-                "e",
-                "time series",
-            ],
-            return_tensors="pt",
-            add_special_tokens=False,
-        )
+        tokens_to_embed = [
+            "0",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            ".",
+            "-",
+            "e",
+            "time series",
+        ]
+
+        all_embeds = []
         with torch.no_grad():
-            num_embeds = self.gemma.embed_tokens(numeric_tokens.input_ids)
-            numeric_embedding = num_embeds.mean(dim=0).mean(dim=0)
+            for token_str in tokens_to_embed:
+                token_ids = tokenizer(
+                    token_str,
+                    return_tensors="pt",
+                    add_special_tokens=False,
+                ).input_ids
+                embeds = self.gemma.embed_tokens(token_ids)
+                all_embeds.append(embeds.mean(dim=1))
+
+            numeric_embedding = torch.cat(all_embeds, dim=0).mean(dim=0)
         return numeric_embedding
 
     def forward(self, context, mask=None, target=None, target_mask=None):
