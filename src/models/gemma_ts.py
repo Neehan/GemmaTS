@@ -34,37 +34,32 @@ class GemmaTS(ChronosBoltModelForForecasting):
             model_name, torch_dtype=torch.float32, token=hf_token
         )
 
-        # Handle two Gemma architectures
-        if hasattr(gemma, "language_model"):
+        # Detect model type and extract the text model
+        self.is_multimodal = hasattr(gemma, "language_model")
+
+        if self.is_multimodal:
             # Gemma3ForConditionalGeneration (4B+) - multimodal
-            self.gemma = gemma.language_model
+            self.gemma = gemma.language_model.model
             gemma_dim = gemma.config.text_config.hidden_size
         else:
             # Gemma3ForCausalLM (1B or less)
             self.gemma = gemma.model
             gemma_dim = gemma.config.hidden_size
 
-        # Load tokenizer for BOS token and optional text prompt
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name, token=hf_token)
-
-        # Store BOS token ID - get from config or tokenizer
-        self.bos_token_id = gemma.config.bos_token_id
+        # Get BOS token from generation_config (most reliable)
+        self.bos_token_id = gemma.generation_config.bos_token_id
         if self.bos_token_id is None:
-            self.bos_token_id = self.tokenizer.bos_token_id
-        if self.bos_token_id is None:
-            raise ValueError("BOS token ID is not available in config or tokenizer")
+            raise ValueError("BOS token ID not found in generation_config")
 
         # Optional: Set up text prompt if provided
         if text_prompt is not None:
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name, token=hf_token)
             prompt_tokens = self.tokenizer(
                 text_prompt, return_tensors="pt", add_special_tokens=False
             )
-            self.prompt_ids = prompt_tokens.input_ids[0]  # Shape: (num_tokens,)
+            self.prompt_ids = prompt_tokens.input_ids[0]
         else:
             self.prompt_ids = None
-
-        # Get embedding function - Gemma3 uses token_embeddings
-        self.get_embeddings = lambda ids: self.gemma.embeddings.token_embeddings(ids)
 
         # Projection layers (trainable)
         self.enc_to_gemma = nn.Linear(self.model_dim, gemma_dim)
@@ -86,14 +81,16 @@ class GemmaTS(ChronosBoltModelForForecasting):
 
         # Get BOS token embedding
         bos_ids = torch.tensor([self.bos_token_id], device=device)
-        bos_embed = self.get_embeddings(bos_ids)  # (1, dim)
+        bos_embed = self.gemma.embed_tokens(bos_ids)  # (1, dim)
         bos_embed = bos_embed.unsqueeze(0).expand(B, -1, -1)  # (B, 1, dim)
 
         # Conditionally add text prompt if configured
         if self.prompt_ids is not None:
             # Get prompt embeddings
             prompt_ids = self.prompt_ids.to(device)
-            prompt_embeds = self.get_embeddings(prompt_ids)  # (num_prompt_tokens, dim)
+            prompt_embeds = self.gemma.embed_tokens(
+                prompt_ids
+            )  # (num_prompt_tokens, dim)
             prompt_embeds = prompt_embeds.unsqueeze(0).expand(
                 B, -1, -1
             )  # (B, num_prompt_tokens, dim)
