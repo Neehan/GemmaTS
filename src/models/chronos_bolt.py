@@ -14,7 +14,7 @@ def create_chronos_bolt(
     """Create pure Chronos Bolt model from pretrained weights.
 
     Note: Chronos Bolt models have a fixed prediction_length determined at training time.
-    For amazon/chronos-bolt-tiny, this is 64. The output layers are sized accordingly.
+    For amazon/chronos-bolt, this is 64. The output layers are sized accordingly.
     You cannot change prediction_length without retraining the output head.
     """
     model = ChronosBoltModelForForecasting.from_pretrained(chronos_base)
