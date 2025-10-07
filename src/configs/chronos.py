@@ -20,6 +20,8 @@ class Config(ETTh1BaseConfig):
     freeze: bool = True
 
     # Loss function
+    batch_size: int = 256
+    use_bfloat16: bool = True
     loss_fn: str = "quantile"
 
     # Output path
