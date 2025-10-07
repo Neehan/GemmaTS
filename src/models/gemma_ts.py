@@ -4,9 +4,17 @@ import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from dataclasses import dataclass
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 from chronos.chronos_bolt import ChronosBoltModelForForecasting, ChronosBoltOutput
 from typing import Optional
+
+
+@dataclass
+class GemmaTSOutput(ChronosBoltOutput):
+    """Extended output with encoder hidden states."""
+
+    encoder_hidden_states: Optional[torch.Tensor] = None
 
 
 class GemmaTS(ChronosBoltModelForForecasting):
@@ -165,13 +173,11 @@ class GemmaTS(ChronosBoltModelForForecasting):
             loc_scale,
         ).view(*quantile_preds_shape)
 
-        output = ChronosBoltOutput(
+        return GemmaTSOutput(
             loss=loss,
             quantile_preds=quantile_preds,
+            encoder_hidden_states=hidden_states,
         )
-        output.encoder_hidden_states = hidden_states
-
-        return output
 
     def decode(
         self, input_embeds, attention_mask, hidden_states, output_attentions=False
