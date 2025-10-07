@@ -25,7 +25,7 @@ class Config(ETTh1BaseConfig):
     batch_size: int = 256
 
     # Loss function
-    loss_fn: str = "quantile"
+    loss_fn: str = "mse"
 
     # Output path
     output_dir: str = "data/checkpoints/gemma_ts_etth1"

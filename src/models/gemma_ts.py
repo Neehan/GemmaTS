@@ -74,11 +74,15 @@ class GemmaTS(ChronosBoltModelForForecasting):
 
         # Projection layers (trainable)
         self.enc_to_gemma = nn.Sequential(
-            nn.Linear(self.model_dim, gemma_dim),
+            nn.Linear(self.model_dim, 2 * gemma_dim),
+            nn.GELU(),
+            nn.Linear(2 * gemma_dim, gemma_dim),
             nn.LayerNorm(gemma_dim),
         )
         self.gemma_to_dec = nn.Sequential(
-            nn.Linear(gemma_dim, self.model_dim),
+            nn.Linear(gemma_dim, 2 * self.model_dim),
+            nn.GELU(),
+            nn.Linear(2 * self.model_dim, self.model_dim),
             nn.LayerNorm(self.model_dim),
         )
 
