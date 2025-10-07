@@ -5,7 +5,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
-from chronos.chronos_bolt import ChronosBoltModelForForecasting
+from chronos.chronos_bolt import ChronosBoltModelForForecasting, ChronosBoltOutput
 from typing import Optional
 
 
@@ -101,18 +101,77 @@ class GemmaTS(ChronosBoltModelForForecasting):
             numeric_embedding = num_embeds.mean(dim=0).mean(dim=0)
         return numeric_embedding
 
-    def forward(
-        self, context, mask=None, target=None, target_mask=None, outputs_dict=None
-    ):
-        """Forward pass with optional outputs_dict to store intermediate values."""
+    def forward(self, context, mask=None, target=None, target_mask=None):
+        """Forward pass that returns both ChronosBoltOutput and encoder hidden states."""
+        batch_size = context.size(0)
+
         hidden_states, loc_scale, input_embeds, attention_mask = self.encode(
             context=context, mask=mask
         )
+        sequence_output = self.decode(input_embeds, attention_mask, hidden_states)
 
-        if outputs_dict is not None:
-            outputs_dict["encoder_hidden_states"] = hidden_states
+        quantile_preds_shape = (
+            batch_size,
+            self.num_quantiles,
+            self.chronos_config.prediction_length,
+        )
+        quantile_preds = self.output_patch_embedding(sequence_output).view(
+            *quantile_preds_shape
+        )
 
-        return super().forward(context, mask, target, target_mask)
+        loss = None
+        if target is not None:
+            target, _ = self.instance_norm(target, loc_scale)
+            target = target.unsqueeze(1)
+            assert self.chronos_config.prediction_length >= target.shape[-1]
+
+            target = target.to(quantile_preds.device)
+            target_mask = (
+                target_mask.unsqueeze(1).to(quantile_preds.device)
+                if target_mask is not None
+                else ~torch.isnan(target)
+            )
+            target[~target_mask] = 0.0
+
+            if self.chronos_config.prediction_length > target.shape[-1]:
+                padding_shape = (
+                    *target.shape[:-1],
+                    self.chronos_config.prediction_length - target.shape[-1],
+                )
+                target = torch.cat(
+                    [target, torch.zeros(padding_shape).to(target)], dim=-1
+                )
+                target_mask = torch.cat(
+                    [target_mask, torch.zeros(padding_shape).to(target_mask)], dim=-1
+                )
+
+            loss = (
+                2
+                * torch.abs(
+                    (target - quantile_preds)
+                    * (
+                        (target <= quantile_preds).float()
+                        - self.quantiles.view(1, self.num_quantiles, 1)  # type: ignore
+                    )
+                )
+                * target_mask.float()
+            )
+            loss = loss.mean(dim=-2)
+            loss = loss.sum(dim=-1)
+            loss = loss.mean()
+
+        quantile_preds = self.instance_norm.inverse(
+            quantile_preds.view(batch_size, -1),
+            loc_scale,
+        ).view(*quantile_preds_shape)
+
+        output = ChronosBoltOutput(
+            loss=loss,
+            quantile_preds=quantile_preds,
+        )
+        output.encoder_hidden_states = hidden_states
+
+        return output
 
     def decode(
         self, input_embeds, attention_mask, hidden_states, output_attentions=False

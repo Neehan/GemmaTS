@@ -111,18 +111,16 @@ class GemmaTSTrainer(Trainer):
         unwrapped_model = self._get_unwrapped_model(model)
 
         if self.model_type == "gemma":
-            outputs_dict = {}
             outputs = model(
                 context=context,
                 mask=None,
                 target=None,
                 target_mask=None,
-                outputs_dict=outputs_dict,
             )
 
             loss = self._compute_chronos_loss(outputs, target, unwrapped_model)
 
-            hidden_states = outputs_dict["encoder_hidden_states"]
+            hidden_states = outputs.encoder_hidden_states
             projected = unwrapped_model.enc_to_gemma(hidden_states)
             align_loss = alignment_loss(projected, unwrapped_model.numeric_embedding)
             loss = loss + 0.1 * align_loss
