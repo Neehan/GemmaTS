@@ -208,7 +208,8 @@ def create_gemma_ts(
             param.requires_grad = True
 
         # unfreeze last Gemma MLP
-        for param in model.gemma.layers[-1].mlp.parameters():
-            param.requires_grad = True
+        for name, param in model.gemma.layers[-1].self_attn.named_parameters():
+            if any(k in name for k in ["q_proj", "v_proj"]):
+                param.requires_grad = True
 
     return model
