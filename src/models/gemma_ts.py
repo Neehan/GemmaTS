@@ -134,8 +134,8 @@ class GemmaTS(ChronosBoltModelForForecasting):
 
 
 def create_gemma_ts(
-    chronos_base: str = "amazon/chronos-bolt-tiny",
-    gemma_model: str = "google/gemma-3-270m",
+    chronos_base: str,
+    gemma_model: str,
     context_length: int = 512,
     prediction_length: int = 64,
     patch_size: int = 16,
@@ -171,6 +171,7 @@ def create_gemma_ts(
         for param in model.gemma_to_dec.parameters():
             param.requires_grad = True
 
+        # output layer params
         for param in model.output_patch_embedding.parameters():
             param.requires_grad = True
 
