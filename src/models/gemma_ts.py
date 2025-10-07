@@ -70,14 +70,9 @@ class GemmaTS(ChronosBoltModelForForecasting):
         else:
             self.prompt_ids = None
 
-        # Projection layers (trainable) - match Gemma's dtype
+        # Projection layers (trainable)
         self.enc_to_gemma = nn.Linear(self.model_dim, gemma_dim)
         self.gemma_to_dec = nn.Linear(gemma_dim, self.model_dim)
-
-        # Convert projection layers to match Gemma's dtype
-        gemma_dtype = next(self.gemma.parameters()).dtype
-        self.enc_to_gemma = self.enc_to_gemma.to(gemma_dtype)
-        self.gemma_to_dec = self.gemma_to_dec.to(gemma_dtype)
 
     def decode(
         self, input_embeds, attention_mask, hidden_states, output_attentions=False
@@ -185,6 +180,10 @@ def create_gemma_ts(
     config.chronos_config["input_patch_stride"] = patch_stride
 
     model = GemmaTS(config, gemma_model, text_prompt, use_bfloat16)
+
+    # Convert entire model to bfloat16 if configured
+    if use_bfloat16:
+        model = model.to(torch.bfloat16)
 
     if freeze:
         for param in model.parameters():
