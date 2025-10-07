@@ -12,8 +12,8 @@ class Config(ETTh1BaseConfig):
     """
 
     # Model paths
-    chronos_pretrained: str = "amazon/chronos-bolt-tiny"
-    gemma_model_name: str = "google/gemma-3-1b-it"
+    chronos_pretrained: str = "amazon/chronos-bolt-mini"
+    gemma_model_name: str = "google/gemma-3-270m"
 
     # Architecture
     input_patch_size: int = 16
