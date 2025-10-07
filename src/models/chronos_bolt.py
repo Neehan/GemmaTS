@@ -37,4 +37,11 @@ def create_chronos_bolt(
     model.config.chronos_config["input_patch_stride"] = patch_stride
     model.chronos_config.input_patch_stride = patch_stride
 
+    # Freeze pretrained encoder and decoder, keep output head trainable
+    for param in model.encoder.parameters():
+        param.requires_grad = False
+
+    for param in model.decoder.parameters():
+        param.requires_grad = False
+
     return model

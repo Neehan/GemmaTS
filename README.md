@@ -46,18 +46,21 @@ export KMP_DUPLICATE_LIB_OK=TRUE  # Required for macOS
 
 2. **Run training** as a Python module from project root:
 ```bash
-# Quick test (10 steps)
-python -m src.scripts.train --config test
+# Quick demo (20 epochs)
+python -m src.scripts.train --config gemma_ts_demo
 
-# Full training (20 epochs)
-python -m src.scripts.train --config full_train
+# Full training (100 epochs)
+python -m src.scripts.train --config gemma_ts
 ```
 
 ### Configuration Files
 
 Configs are in `src/configs/`:
-- `test.py`: Quick test (10 steps, 1 epoch)
-- `full_train.py`: Full training (20 epochs)
+- `gemma_ts_demo.py`: Quick demo (20 epochs)
+- `gemma_ts.py`: Full training (100 epochs)
+- `chronos_demo.py`: Chronos Bolt baseline demo
+- `chronos.py`: Chronos Bolt baseline full training
+- `patchtst.py`: PatchTST baseline
 
 ### Multi-GPU (HPC cluster)
 
@@ -70,13 +73,13 @@ accelerate config
 Then launch training:
 
 ```bash
-accelerate launch src/scripts/train.py --config full_train
+accelerate launch src/scripts/train.py --config gemma_ts
 ```
 
 For 4 GPUs with mixed precision (fp16):
 
 ```bash
-accelerate launch --num_processes=4 --mixed_precision=fp16 src/scripts/train.py --config full_train
+accelerate launch --num_processes=4 --mixed_precision=fp16 src/scripts/train.py --config gemma_ts
 ```
 
 ## Usage
@@ -107,15 +110,20 @@ generated = model.generate(context, steps=5, mask=mask)
 GemmaTS/
 ├── src/
 │   ├── models/
-│   │   └── gemma_ts.py          # Main model (inherits ChronosBolt)
+│   │   ├── gemma_ts.py          # Main model (inherits ChronosBolt)
+│   │   ├── chronos_bolt.py      # Chronos Bolt baseline
+│   │   └── patchtst.py          # PatchTST baseline
 │   ├── configs/
-│   │   ├── test.py              # Test config
-│   │   └── full_train.py        # Full training config
+│   │   ├── gemma_ts.py          # Full GemmaTS training
+│   │   ├── gemma_ts_demo.py     # Quick GemmaTS demo
+│   │   ├── chronos.py           # Chronos Bolt full training
+│   │   ├── chronos_demo.py      # Chronos Bolt demo
+│   │   └── patchtst.py          # PatchTST config
 │   ├── dataloader/
 │   │   ├── data_loader.py       # Dataset classes
 │   │   └── data_factory.py      # Data provider
 │   ├── utils/
-│   │   ├── metrics.py           # MSE, MAE, sMAPE
+│   │   ├── metrics.py           # MSE, MAE
 │   │   └── seed.py              # Reproducibility
 │   └── scripts/
 │       └── train.py             # Training script

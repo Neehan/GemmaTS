@@ -21,10 +21,10 @@ from src.models.patchtst import create_patchtst
 from src.dataloader.data_factory import data_provider
 from src.utils.metrics import mse, mae
 from src.utils.seed import set_seed
-from src.configs.test import Config as TestConfig
-from src.configs.full_train import Config as FullTrainConfig
+from src.configs.gemma_ts import Config as GemmaTSConfig
+from src.configs.gemma_ts_demo import Config as GemmaTSDemoConfig
 from src.configs.chronos import Config as ChronosConfig
-from src.configs.chronos_test import Config as ChronosTestConfig
+from src.configs.chronos_demo import Config as ChronosDemoConfig
 from src.configs.patchtst import Config as PatchTSTConfig
 
 # Setup logging
@@ -36,11 +36,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 CONFIGS = {
-    "test": TestConfig,
-    "full_train": FullTrainConfig,
+    "gemma_ts": GemmaTSConfig,
+    "gemma_ts_demo": GemmaTSDemoConfig,
     "chronos": ChronosConfig,
-    "chronos_test": ChronosTestConfig,
-    "patchtst": PatchTSTConfig,  # pred_len=64 to match Chronos Bolt
+    "chronos_demo": ChronosDemoConfig,
+    "patchtst": PatchTSTConfig,
 }
 
 
@@ -120,7 +120,7 @@ class GemmaTSTrainer(Trainer):
         # Setup for quantile models
         if self.model_type != "patchtst":
             unwrapped_model = self._get_unwrapped_model(model)
-            quantiles = unwrapped_model.chronos_config.quantiles
+            quantiles = unwrapped_model.chronos_config.quantiles  # type: ignore[union-attr]
             median_idx = torch.abs(torch.tensor(quantiles) - 0.5).argmin()
 
         for batch in eval_dataloader:
@@ -137,7 +137,7 @@ class GemmaTSTrainer(Trainer):
             # Get predictions based on model type
             if self.model_type == "patchtst":
                 preds = outputs.predictions.cpu()
-            else:  # chronos 
+            else:  # chronos
                 preds = outputs.quantile_preds[:, median_idx, :].cpu()
 
             target_cpu = batch["target"].cpu()
@@ -185,7 +185,7 @@ def main(config_name):
     logger.info(f"Test samples: {len(test_ds)}")
 
     # Initialize model
-    if config_name in ["chronos", "chronos_test"]:
+    if config_name in ["chronos", "chronos_demo"]:
         logger.info("Initializing Chronos Bolt baseline model...")
         model = create_chronos_bolt(
             chronos_base=config.chronos_pretrained,
@@ -246,7 +246,7 @@ def main(config_name):
     )
 
     # Determine model type
-    if config_name in ["chronos", "chronos_test"]:
+    if config_name in ["chronos", "chronos_demo"]:
         model_type = "chronos"
     elif config_name == "patchtst":
         model_type = "patchtst"
@@ -351,8 +351,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         type=str,
-        default="full_train",
-        help="Config name from configs directory (default: full_train)",
+        default="gemma_ts",
+        help="Config name from configs directory (default: gemma_ts)",
     )
     args = parser.parse_args()
 

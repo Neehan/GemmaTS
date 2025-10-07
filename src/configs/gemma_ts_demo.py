@@ -1,4 +1,4 @@
-"""Quick test configuration for GemmaTS."""
+"""Quick demo configuration for GemmaTS."""
 
 from dataclasses import dataclass
 from src.configs.base.etth1 import ETTh1BaseConfig
@@ -6,9 +6,9 @@ from src.configs.base.etth1 import ETTh1BaseConfig
 
 @dataclass
 class Config(ETTh1BaseConfig):
-    """Quick test configuration for GemmaTS.
+    """Quick demo configuration for GemmaTS.
 
-    Inherits common ETTh1 settings, uses reduced epochs and smaller Gemma model.
+    Inherits common ETTh1 settings, uses reduced epochs for quick testing.
     """
 
     # Model paths
@@ -20,8 +20,8 @@ class Config(ETTh1BaseConfig):
     input_patch_stride: int = 8
     text_prompt: str = "Predict the next values in this time series:"
 
-    # Training - quick test with fewer epochs
+    # Training - quick demo with fewer epochs
     num_train_epochs: int = 20
 
     # Output path
-    output_dir: str = "data/checkpoints/gemma_ts_etth1_test"
+    output_dir: str = "data/checkpoints/gemma_ts_etth1_demo"

@@ -3,7 +3,7 @@
 import os
 import torch
 import torch.nn as nn
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 from chronos.chronos_bolt import ChronosBoltModelForForecasting
 from typing import Optional
 
@@ -34,6 +34,7 @@ class GemmaTS(ChronosBoltModelForForecasting):
             model_name, torch_dtype=torch.float32, token=hf_token
         )
         self.gemma = gemma.model
+
         gemma_dim = gemma.config.hidden_size
 
         # Optional: Set up text prompt if provided
@@ -51,7 +52,7 @@ class GemmaTS(ChronosBoltModelForForecasting):
         if self.bos_token_id is None:
             raise ValueError("BOS token ID is not set for Gemma model")
 
-        # Projection if dimensions don't match
+        # Projection layers (trainable)
         if gemma_dim != self.model_dim:
             self.enc_to_gemma = nn.Linear(self.model_dim, gemma_dim)
             self.gemma_to_dec = nn.Linear(gemma_dim, self.model_dim)
@@ -152,7 +153,7 @@ class GemmaTS(ChronosBoltModelForForecasting):
 
 def create_gemma_ts(
     chronos_base: str = "amazon/chronos-bolt-tiny",
-    gemma_model: str = "google/gemma-2-2b",
+    gemma_model: str = "google/gemma-3-270m",
     context_length: int = 512,
     prediction_length: int = 64,
     patch_size: int = 16,
@@ -165,7 +166,6 @@ def create_gemma_ts(
     so we CAN change prediction_length here (unlike loading pretrained Chronos Bolt).
     The output layer will be initialized with the correct size for the specified prediction_length.
     """
-    from transformers import AutoConfig
 
     # Load Chronos config as template
     config = AutoConfig.from_pretrained(chronos_base)
@@ -176,4 +176,12 @@ def create_gemma_ts(
     config.chronos_config["input_patch_size"] = patch_size
     config.chronos_config["input_patch_stride"] = patch_stride
 
-    return GemmaTS(config, gemma_model, text_prompt)
+    model = GemmaTS(config, gemma_model, text_prompt)
+
+    for param in model.encoder.parameters():
+        param.requires_grad = False
+
+    for param in model.gemma.parameters():
+        param.requires_grad = False
+
+    return model

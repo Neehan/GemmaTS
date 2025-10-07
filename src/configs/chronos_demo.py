@@ -1,4 +1,4 @@
-"""Quick test configuration for Chronos Bolt."""
+"""Quick demo configuration for Chronos Bolt."""
 
 from dataclasses import dataclass
 from src.configs.base.etth1 import ETTh1BaseConfig
@@ -6,7 +6,7 @@ from src.configs.base.etth1 import ETTh1BaseConfig
 
 @dataclass
 class Config(ETTh1BaseConfig):
-    """Quick test configuration for Chronos Bolt baseline.
+    """Quick demo configuration for Chronos Bolt baseline.
 
     Inherits common ETTh1 settings, only defines Chronos-specific parameters.
     """
@@ -19,4 +19,4 @@ class Config(ETTh1BaseConfig):
     input_patch_stride: int = 8
 
     # Output path
-    output_dir: str = "data/checkpoints/chronos_bolt_etth1_test"
+    output_dir: str = "data/checkpoints/chronos_bolt_etth1_demo"
