@@ -21,6 +21,9 @@ class Config(ETTh1BaseConfig):
     text_prompt: str = "Predict the next value in this time series: "
     freeze: bool = True
 
+    # Training config
+    batch_size: int = 256
+
     # Loss function
     loss_fn: str = "mse"
 
