@@ -13,7 +13,7 @@ class Config(ETTh1BaseConfig):
 
     # Model paths
     chronos_pretrained: str = "amazon/chronos-bolt-mini"
-    gemma_model_name: str = "google/gemma-3-4b-it"
+    gemma_model_name: str = "google/gemma-3-270m"
 
     # Architecture
     input_patch_size: int = 16
@@ -22,7 +22,7 @@ class Config(ETTh1BaseConfig):
     freeze: bool = True
 
     # Training config
-    batch_size: int = 96
+    batch_size: int = 256
 
     # Loss function
     loss_fn: str = "mse"

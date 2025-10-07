@@ -71,8 +71,14 @@ class GemmaTS(ChronosBoltModelForForecasting):
             self.prompt_ids = None
 
         # Projection layers (trainable)
-        self.enc_to_gemma = nn.Linear(self.model_dim, gemma_dim)
-        self.gemma_to_dec = nn.Linear(gemma_dim, self.model_dim)
+        self.enc_to_gemma = nn.Sequential(
+            nn.Linear(self.model_dim, gemma_dim),
+            nn.LayerNorm(gemma_dim),
+        )
+        self.gemma_to_dec = nn.Sequential(
+            nn.Linear(gemma_dim, self.model_dim),
+            nn.LayerNorm(self.model_dim),
+        )
 
     def decode(
         self, input_embeds, attention_mask, hidden_states, output_attentions=False

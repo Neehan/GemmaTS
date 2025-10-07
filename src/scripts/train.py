@@ -249,12 +249,8 @@ def main(config_name):
         warmup_steps=config.warmup_steps,
         logging_steps=config.logging_steps,
         eval_steps=config.eval_steps,
-        save_steps=config.save_steps,
         eval_strategy="steps",
-        save_strategy="steps",
-        load_best_model_at_end=True,
-        metric_for_best_model="eval_loss",
-        greater_is_better=False,
+        save_strategy="no",  # Don't save checkpoints during training
         dataloader_num_workers=config.num_workers,
         remove_unused_columns=False,
         report_to="none",
@@ -352,9 +348,13 @@ def main(config_name):
         np.save(os.path.join(results_dir, "targets.npy"), all_targets)
         logger.info(f"Saved predictions to {results_dir}")
 
-    # Save final model
-    trainer.save_model(os.path.join(config.output_dir, "final_model"))
-    logger.info(f"Saved final model to {config.output_dir}/final_model")
+    # Optionally save final model (disabled by default due to size)
+    save_final = os.getenv("SAVE_FINAL_MODEL", "false").lower() == "true"
+    if save_final:
+        trainer.save_model(os.path.join(config.output_dir, "final_model"))
+        logger.info(f"Saved final model to {config.output_dir}/final_model")
+    else:
+        logger.info("Skipping final model save (set SAVE_FINAL_MODEL=true to enable)")
 
 
 if __name__ == "__main__":
