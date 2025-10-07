@@ -22,7 +22,7 @@ class Config(ETTh1BaseConfig):
     freeze: bool = True
 
     # Training config
-    batch_size: int = 64
+    batch_size: int = 96
 
     # Loss function
     loss_fn: str = "mse"
