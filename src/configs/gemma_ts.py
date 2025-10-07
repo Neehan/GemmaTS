@@ -21,8 +21,5 @@ class Config(ETTh1BaseConfig):
     text_prompt: str = "Predict the next values in this time series:"
     freeze: bool = True
 
-    # Training - longer for full model
-    num_train_epochs: int = 100
-
     # Output path
     output_dir: str = "data/checkpoints/gemma_ts_etth1"

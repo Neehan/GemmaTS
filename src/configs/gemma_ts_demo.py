@@ -22,7 +22,7 @@ class Config(ETTh1BaseConfig):
     freeze: bool = True
 
     # Training - quick demo with fewer epochs
-    num_train_epochs: int = 20
+    num_train_epochs: int = 5
 
     # Output path
     output_dir: str = "data/checkpoints/gemma_ts_etth1_demo"
