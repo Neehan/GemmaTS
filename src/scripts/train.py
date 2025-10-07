@@ -137,7 +137,7 @@ class GemmaTSTrainer(Trainer):
             # Get predictions based on model type
             if self.model_type == "patchtst":
                 preds = outputs.predictions.cpu()
-            else:  # chronos or gemma
+            else:  # chronos 
                 preds = outputs.quantile_preds[:, median_idx, :].cpu()
 
             target_cpu = batch["target"].cpu()

@@ -29,7 +29,7 @@ class PatchTSTWrapper(nn.Module):
         Forward pass matching Chronos interface.
 
         Args:
-            context: (batch_size, seq_len) for univariate
+            context: (batch_size, seq_len) for univariate or (batch_size, seq_len, n_features) for multivariate
             Others ignored for compatibility
 
         Returns:
@@ -37,15 +37,22 @@ class PatchTSTWrapper(nn.Module):
         """
         # PatchTST expects (batch_size, seq_len, n_features)
         if context.dim() == 2:
-            x = context.unsqueeze(-1)  # (batch, seq_len, 1)
+            x = context.unsqueeze(-1)  # (batch, seq_len, 1) for univariate
         else:
-            x = context
+            x = context  # (batch, seq_len, n_features) for multivariate
 
         # Forward through PatchTST
         output = self.model(x)  # (batch, pred_len, n_features)
 
         # Return output object
-        return PatchTSTOutput(predictions=output.squeeze(-1))
+        # For univariate (n_features=1), squeeze to (batch, pred_len)
+        # For multivariate, keep as (batch, pred_len, n_features)
+        if output.shape[-1] == 1:
+            predictions = output.squeeze(-1)
+        else:
+            predictions = output
+
+        return PatchTSTOutput(predictions=predictions)
 
 
 class PatchTSTConfig:

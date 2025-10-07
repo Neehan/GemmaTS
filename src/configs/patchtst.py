@@ -11,8 +11,11 @@ class Config(ETTh1BaseConfig):
     Inherits common ETTh1 settings, only defines PatchTST-specific architecture.
     """
 
-    # PatchTST architecture (from paper Table 13 - ETTh1 univariate)
-    enc_in: int = 1  # Univariate
+    # Data config - override for multivariate
+    features: str = "M"  # Multivariate (all 7 features)
+
+    # PatchTST architecture (from paper - ETTh1 multivariate)
+    enc_in: int = 7  # Multivariate (7 features in ETTh1)
     e_layers: int = 3
     n_heads: int = 4
     d_model: int = 16
