@@ -12,7 +12,7 @@ class Config(ETTh1BaseConfig):
     """
 
     # Chronos model
-    chronos_pretrained: str = "amazon/chronos-bolt-tiny"
+    chronos_pretrained: str = "amazon/chronos-bolt-mini"
 
     # Chronos architecture
     input_patch_size: int = 16

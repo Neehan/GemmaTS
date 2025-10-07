@@ -18,7 +18,7 @@ class Config(ETTh1BaseConfig):
     # Architecture
     input_patch_size: int = 16
     input_patch_stride: int = 8
-    text_prompt: str = "Predict the next values in this time series:"
+    text_prompt: str = "Predict the next value in this time series: "
     freeze: bool = True
 
     # Loss function
