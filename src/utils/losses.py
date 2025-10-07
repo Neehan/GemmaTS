@@ -1,6 +1,7 @@
 """Loss functions for time series forecasting."""
 
 import torch
+import torch.nn.functional as F
 
 
 def mse_loss(predictions: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
@@ -45,5 +46,28 @@ def quantile_loss(
     loss = loss.mean(dim=-1)
     loss = loss.sum(dim=-1)
     loss = loss.mean()
+
+    return loss
+
+
+def alignment_loss(
+    projected_embeddings: torch.Tensor, target_embedding: torch.Tensor
+) -> torch.Tensor:
+    """Cosine alignment loss for embedding space alignment.
+
+    Encourages projected time series embeddings to align with target embeddings
+    (e.g., numeric token embeddings from language models).
+
+    Args:
+        projected_embeddings: Projected embeddings, shape (batch, seq_len, dim)
+        target_embedding: Target embedding to align to, shape (dim,)
+
+    Returns:
+        Scalar loss value (1 - mean cosine similarity)
+    """
+    projected_embeddings = projected_embeddings.view(-1, projected_embeddings.shape[-1])
+    target_expanded = target_embedding.unsqueeze(0).expand_as(projected_embeddings)
+    cosine_sim = F.cosine_similarity(projected_embeddings, target_expanded, dim=-1)
+    loss = 1 - cosine_sim.mean()
 
     return loss

@@ -23,7 +23,7 @@ from src.models.chronos_bolt import create_chronos_bolt
 from src.models.patchtst import create_patchtst
 from src.dataloader.data_factory import data_provider
 from src.utils.metrics import mse, mae
-from src.utils.losses import mse_loss, quantile_loss
+from src.utils.losses import mse_loss, quantile_loss, alignment_loss
 from src.utils.seed import set_seed
 from src.configs.gemma_ts import Config as GemmaTSConfig
 from src.configs.gemma_ts_demo import Config as GemmaTSDemoConfig
@@ -91,29 +91,59 @@ class GemmaTSTrainer(Trainer):
         """Get the underlying model from DataParallel/DistributedDataParallel wrapper."""
         return model.module if hasattr(model, "module") else model
 
+    def _compute_chronos_loss(self, outputs, target, unwrapped_model):
+        """Compute loss for quantile-based models (Chronos, GemmaTS)."""
+        quantiles = unwrapped_model.chronos_config.quantiles
+
+        if self.loss_fn == "mse":
+            median_idx = torch.abs(torch.tensor(quantiles) - 0.5).argmin()
+            preds = outputs.quantile_preds[:, median_idx, :]
+            return mse_loss(preds, target)
+        elif self.loss_fn == "quantile":
+            return quantile_loss(outputs.quantile_preds, target, quantiles)
+        else:
+            raise ValueError(f"Unknown loss function: {self.loss_fn}")
+
     def compute_loss(self, model, inputs, return_outputs=False, num_items_in_batch=None):  # type: ignore[override]
         """Compute loss for training."""
         context = inputs["context"]
         target = inputs["target"]
+        unwrapped_model = self._get_unwrapped_model(model)
 
-        outputs = model(context=context, mask=None, target=None, target_mask=None)
+        if self.model_type == "gemma":
+            outputs_dict = {}
+            outputs = model(
+                context=context,
+                mask=None,
+                target=None,
+                target_mask=None,
+                outputs_dict=outputs_dict,
+            )
 
-        # Compute loss based on configured loss function
-        if self.loss_fn == "mse":
-            if self.model_type == "patchtst":
+            loss = self._compute_chronos_loss(outputs, target, unwrapped_model)
+
+            hidden_states = outputs_dict["encoder_hidden_states"]
+            projected = unwrapped_model.enc_to_gemma(hidden_states)
+            align_loss = alignment_loss(projected, unwrapped_model.numeric_embedding)
+            loss = loss + 0.1 * align_loss
+
+        elif self.model_type == "chronos":
+            outputs = model(context=context, mask=None, target=None, target_mask=None)
+            loss = self._compute_chronos_loss(outputs, target, unwrapped_model)
+
+        elif self.model_type == "patchtst":
+            outputs = model(context=context, mask=None, target=None, target_mask=None)
+
+            if self.loss_fn == "mse":
                 preds = outputs.predictions
+                loss = mse_loss(preds, target)
             else:
-                unwrapped_model = self._get_unwrapped_model(model)
-                quantiles = unwrapped_model.chronos_config.quantiles
-                median_idx = torch.abs(torch.tensor(quantiles) - 0.5).argmin()
-                preds = outputs.quantile_preds[:, median_idx, :]
-            loss = mse_loss(preds, target)
-        elif self.loss_fn == "quantile":
-            unwrapped_model = self._get_unwrapped_model(model)
-            quantiles = unwrapped_model.chronos_config.quantiles
-            loss = quantile_loss(outputs.quantile_preds, target, quantiles)
+                raise ValueError(
+                    f"PatchTST only supports MSE loss, got: {self.loss_fn}"
+                )
+
         else:
-            raise ValueError(f"Unknown loss function: {self.loss_fn}")
+            raise ValueError(f"Unknown model type: {self.model_type}")
 
         return (loss, outputs) if return_outputs else loss
 

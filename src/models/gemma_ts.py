@@ -3,6 +3,7 @@
 import os
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 from chronos.chronos_bolt import ChronosBoltModelForForecasting
 from typing import Optional
@@ -62,15 +63,21 @@ class GemmaTS(ChronosBoltModelForForecasting):
         if self.bos_token_id is None:
             raise ValueError("BOS token ID not found in generation_config")
 
+        # Load tokenizer for text prompts and numeric embeddings
+        tokenizer = AutoTokenizer.from_pretrained(model_name, token=hf_token)
+
         # Optional: Set up text prompt if provided
         if text_prompt is not None:
-            self.tokenizer = AutoTokenizer.from_pretrained(model_name, token=hf_token)
-            prompt_tokens = self.tokenizer(
+            prompt_tokens = tokenizer(
                 text_prompt, return_tensors="pt", add_special_tokens=False
             )
             self.prompt_ids = prompt_tokens.input_ids[0]
         else:
             self.prompt_ids = None
+
+        # Precompute average numeric token embedding
+        numeric_embedding = self._compute_numeric_embedding(tokenizer)
+        self.register_buffer("numeric_embedding", numeric_embedding)
 
         # Projection layers (trainable)
         self.enc_to_gemma = nn.Sequential(
@@ -81,6 +88,31 @@ class GemmaTS(ChronosBoltModelForForecasting):
             nn.Linear(gemma_dim, self.model_dim),
             nn.RMSNorm(self.model_dim),
         )
+
+    def _compute_numeric_embedding(self, tokenizer):
+        """Compute average embedding of numeric tokens from Gemma."""
+        numeric_tokens = tokenizer(
+            ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "-", "e"],
+            return_tensors="pt",
+            add_special_tokens=False,
+        )
+        with torch.no_grad():
+            num_embeds = self.gemma.embed_tokens(numeric_tokens.input_ids)
+            numeric_embedding = num_embeds.mean(dim=0).mean(dim=0)
+        return numeric_embedding
+
+    def forward(
+        self, context, mask=None, target=None, target_mask=None, outputs_dict=None
+    ):
+        """Forward pass with optional outputs_dict to store intermediate values."""
+        hidden_states, loc_scale, input_embeds, attention_mask = self.encode(
+            context=context, mask=mask
+        )
+
+        if outputs_dict is not None:
+            outputs_dict["encoder_hidden_states"] = hidden_states
+
+        return super().forward(context, mask, target, target_mask)
 
     def decode(
         self, input_embeds, attention_mask, hidden_states, output_attentions=False
@@ -126,38 +158,6 @@ class GemmaTS(ChronosBoltModelForForecasting):
 
         # Project back to decoder dimension
         return self.gemma_to_dec(last)
-
-    @torch.no_grad()
-    def generate(
-        self, context: torch.Tensor, steps: int, mask: Optional[torch.Tensor] = None
-    ):
-        """Autoregressive generation."""
-        self.eval()
-
-        curr_ctx = context.clone()
-        curr_mask = mask.clone() if mask is not None else None
-        generated = context.clone()
-
-        # Find median quantile index
-        quantiles = self.chronos_config.quantiles
-        med_idx = quantiles.index(0.5) if 0.5 in quantiles else len(quantiles) // 2
-
-        for _ in range(steps):
-            outputs = self.forward(curr_ctx, curr_mask)
-            assert outputs.quantile_preds is not None
-            next_vals = outputs.quantile_preds[:, med_idx, :]
-
-            generated = torch.cat([generated, next_vals], dim=-1)
-
-            curr_ctx = torch.cat([curr_ctx, next_vals], dim=-1)
-            curr_ctx = curr_ctx[:, -self.chronos_config.context_length :]
-
-            if curr_mask is not None:
-                new_mask = torch.ones_like(next_vals)
-                curr_mask = torch.cat([curr_mask, new_mask], dim=-1)
-                curr_mask = curr_mask[:, -self.chronos_config.context_length :]
-
-        return generated
 
 
 def create_gemma_ts(
