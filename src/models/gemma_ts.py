@@ -34,12 +34,22 @@ class GemmaTS(ChronosBoltModelForForecasting):
             model_name, torch_dtype=torch.float32, token=hf_token
         )
 
+        # Debug: print model structure
+        print(f"Model type: {type(gemma).__name__}")
+        print(
+            f"Top-level attributes: {[attr for attr in dir(gemma) if not attr.startswith('_')][:20]}"
+        )
+
         # Detect model type and extract the text model
         self.is_multimodal = hasattr(gemma, "language_model")
 
         if self.is_multimodal:
             # Gemma3ForConditionalGeneration (4B+) - multimodal
-            self.gemma = gemma.language_model.model
+            print(f"Language model type: {type(gemma.language_model).__name__}")
+            print(
+                f"Language model attributes: {[attr for attr in dir(gemma.language_model) if not attr.startswith('_')][:20]}"
+            )
+            self.gemma = gemma.language_model
             gemma_dim = gemma.config.text_config.hidden_size
         else:
             # Gemma3ForCausalLM (1B or less)
