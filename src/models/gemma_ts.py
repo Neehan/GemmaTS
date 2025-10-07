@@ -163,13 +163,13 @@ class GemmaTS(ChronosBoltModelForForecasting):
 def create_gemma_ts(
     chronos_base: str,
     gemma_model: str,
-    context_length: int = 512,
-    prediction_length: int = 64,
-    patch_size: int = 16,
-    patch_stride: int = 8,
-    text_prompt: Optional[str] = None,
-    freeze: bool = True,
-    use_bfloat16: bool = True,
+    context_length: int,
+    prediction_length: int,
+    patch_size: int,
+    patch_stride: int,
+    text_prompt: Optional[str],
+    freeze: bool,
+    use_bfloat16: bool,
 ):
     """Create GemmaTS from Chronos config.
 
@@ -208,7 +208,7 @@ def create_gemma_ts(
             param.requires_grad = True
 
         # unfreeze last Gemma layer
-        print(model.gemma.layers)
+        # print(model.gemma.layers)
         # for param in model.gemma.layers[-1].parameters():
         #     param.requires_grad = True
 
