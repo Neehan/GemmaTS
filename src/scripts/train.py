@@ -222,7 +222,9 @@ def main(config_name):
             stride=config.stride,
         )
     else:
-        logger.info("Initializing GemmaTS model...")
+        logger.info(
+            f"Initializing GemmaTS model ({config.chronos_pretrained} + {config.gemma_model_name})..."
+        )
         model = create_gemma_ts(
             chronos_base=config.chronos_pretrained,
             gemma_model=config.gemma_model_name,
