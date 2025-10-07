@@ -19,5 +19,8 @@ class Config(ETTh1BaseConfig):
     input_patch_stride: int = 8
     freeze: bool = True
 
+    # Loss function
+    loss_fn: str = "quantile"
+
     # Output path
     output_dir: str = "data/checkpoints/chronos_bolt_etth1"

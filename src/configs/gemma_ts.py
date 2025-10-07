@@ -21,5 +21,8 @@ class Config(ETTh1BaseConfig):
     text_prompt: str = "Predict the next values in this time series:"
     freeze: bool = True
 
+    # Loss function
+    loss_fn: str = "quantile"
+
     # Output path
     output_dir: str = "data/checkpoints/gemma_ts_etth1"

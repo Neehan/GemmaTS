@@ -33,5 +33,8 @@ class Config(ETTh1BaseConfig):
     kernel_size: int = 25
     padding_patch: str = "end"
 
+    # Loss function
+    loss_fn: str = "mse"
+
     # Output path
     output_dir: str = "data/checkpoints/patchtst_etth1"

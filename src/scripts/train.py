@@ -20,6 +20,7 @@ from src.models.chronos_bolt import create_chronos_bolt
 from src.models.patchtst import create_patchtst
 from src.dataloader.data_factory import data_provider
 from src.utils.metrics import mse, mae
+from src.utils.losses import mse_loss, quantile_loss
 from src.utils.seed import set_seed
 from src.configs.gemma_ts import Config as GemmaTSConfig
 from src.configs.gemma_ts_demo import Config as GemmaTSDemoConfig
@@ -73,13 +74,15 @@ class TimeSeriesDataset(torch.utils.data.Dataset):
 class GemmaTSTrainer(Trainer):
     """Custom Trainer for time series models."""
 
-    def __init__(self, model_type, *args, **kwargs):
+    def __init__(self, model_type, loss_fn, *args, **kwargs):
         """
         Args:
             model_type: One of 'chronos', 'patchtst', or 'gemma'
+            loss_fn: Loss function to use ('mse' or 'quantile')
         """
         super().__init__(*args, **kwargs)
         self.model_type = model_type
+        self.loss_fn = loss_fn
 
     def _get_unwrapped_model(self, model):
         """Get the underlying model from DataParallel/DistributedDataParallel wrapper."""
@@ -92,17 +95,22 @@ class GemmaTSTrainer(Trainer):
 
         outputs = model(context=context, mask=None, target=None, target_mask=None)
 
-        # Get predictions based on model type
-        if self.model_type == "patchtst":
-            preds = outputs.predictions
-        else:  # chronos or gemma
+        # Compute loss based on configured loss function
+        if self.loss_fn == "mse":
+            if self.model_type == "patchtst":
+                preds = outputs.predictions
+            else:
+                unwrapped_model = self._get_unwrapped_model(model)
+                quantiles = unwrapped_model.chronos_config.quantiles
+                median_idx = torch.abs(torch.tensor(quantiles) - 0.5).argmin()
+                preds = outputs.quantile_preds[:, median_idx, :]
+            loss = mse_loss(preds, target)
+        elif self.loss_fn == "quantile":
             unwrapped_model = self._get_unwrapped_model(model)
             quantiles = unwrapped_model.chronos_config.quantiles
-            median_idx = torch.abs(torch.tensor(quantiles) - 0.5).argmin()
-            preds = outputs.quantile_preds[:, median_idx, :]
-
-        # Compute MSE loss
-        loss = torch.nn.functional.mse_loss(preds, target)
+            loss = quantile_loss(outputs.quantile_preds, target, quantiles)
+        else:
+            raise ValueError(f"Unknown loss function: {self.loss_fn}")
 
         return (loss, outputs) if return_outputs else loss
 
@@ -115,12 +123,6 @@ class GemmaTSTrainer(Trainer):
 
         all_preds = []
         all_targets = []
-
-        # Setup for quantile models
-        if self.model_type != "patchtst":
-            unwrapped_model = self._get_unwrapped_model(model)
-            quantiles = unwrapped_model.chronos_config.quantiles  # type: ignore[union-attr]
-            median_idx = torch.abs(torch.tensor(quantiles) - 0.5).argmin()
 
         for batch in eval_dataloader:
             batch = self._prepare_inputs(batch)
@@ -137,6 +139,9 @@ class GemmaTSTrainer(Trainer):
             if self.model_type == "patchtst":
                 preds = outputs.predictions
             else:  # chronos
+                unwrapped_model = self._get_unwrapped_model(model)
+                quantiles = unwrapped_model.chronos_config.quantiles  # type: ignore[union-attr]
+                median_idx = torch.abs(torch.tensor(quantiles) - 0.5).argmin()
                 preds = outputs.quantile_preds[:, median_idx, :]
 
             all_preds.append(preds)
@@ -178,9 +183,9 @@ def main(config_name):
     test_dataset, _ = data_provider(config, flag="test")
 
     # Wrap datasets - pass scaler for inverse transform
-    train_ds = TimeSeriesDataset(train_dataset, config.pred_len, train_dataset.scaler)
-    val_ds = TimeSeriesDataset(val_dataset, config.pred_len, val_dataset.scaler)
-    test_ds = TimeSeriesDataset(test_dataset, config.pred_len, test_dataset.scaler)
+    train_ds = TimeSeriesDataset(train_dataset, config.pred_len, train_dataset.scaler)  # type: ignore[attr-defined]
+    val_ds = TimeSeriesDataset(val_dataset, config.pred_len, val_dataset.scaler)  # type: ignore[attr-defined]
+    test_ds = TimeSeriesDataset(test_dataset, config.pred_len, test_dataset.scaler)  # type: ignore[attr-defined]
 
     logger.info(f"Train samples: {len(train_ds)}")
     logger.info(f"Val samples: {len(val_ds)}")
@@ -260,6 +265,7 @@ def main(config_name):
     # Initialize trainer
     trainer = GemmaTSTrainer(
         model_type=model_type,
+        loss_fn=config.loss_fn,
         model=model,
         args=training_args,
         train_dataset=train_ds,
@@ -313,12 +319,6 @@ def main(config_name):
         model.eval()  # type: ignore[union-attr]
         test_dataloader = trainer.get_test_dataloader(test_ds)
 
-        # Setup for quantile models
-        if model_type != "patchtst":
-            unwrapped_model = trainer._get_unwrapped_model(model)  # type: ignore[attr-defined]
-            quantiles = unwrapped_model.chronos_config.quantiles
-            median_idx = torch.abs(torch.tensor(quantiles) - 0.5).argmin()
-
         for batch in test_dataloader:
             batch = trainer._prepare_inputs(batch)
             with torch.no_grad():
@@ -333,6 +333,9 @@ def main(config_name):
             if model_type == "patchtst":
                 preds = outputs.predictions
             else:  # chronos or gemma
+                unwrapped_model = trainer._get_unwrapped_model(model)  # type: ignore[attr-defined]
+                quantiles = unwrapped_model.chronos_config.quantiles  # type: ignore[union-attr]
+                median_idx = torch.abs(torch.tensor(quantiles) - 0.5).argmin()
                 preds = outputs.quantile_preds[:, median_idx, :]
 
             all_preds.append(preds)
