@@ -35,7 +35,8 @@ class GemmaTS(ChronosBoltModelForForecasting):
         )
         self.gemma = gemma.model
 
-        gemma_dim = gemma.config.hidden_size
+        # Get hidden dimension from the embedding layer (most reliable)
+        gemma_dim = self.gemma.embed_tokens.weight.shape[1]
 
         # Optional: Set up text prompt if provided
         if text_prompt is not None:
