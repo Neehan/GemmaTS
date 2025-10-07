@@ -1,5 +1,6 @@
 """Pure Chronos Bolt model for baseline comparison."""
 
+import torch
 from chronos.chronos_bolt import ChronosBoltModelForForecasting
 
 
@@ -10,6 +11,7 @@ def create_chronos_bolt(
     patch_size: int,
     patch_stride: int,
     freeze: bool = True,
+    use_bfloat16: bool = True,
 ):
     """Create pure Chronos Bolt model from pretrained weights.
 
@@ -17,7 +19,10 @@ def create_chronos_bolt(
     For amazon/chronos-bolt, this is 64. The output layers are sized accordingly.
     You cannot change prediction_length without retraining the output head.
     """
-    model = ChronosBoltModelForForecasting.from_pretrained(chronos_base)
+    dtype = torch.bfloat16 if use_bfloat16 else torch.float32
+    model = ChronosBoltModelForForecasting.from_pretrained(
+        chronos_base, torch_dtype=dtype
+    )
 
     # Verify the prediction_length matches the model's architecture
     model_pred_len = model.chronos_config.prediction_length

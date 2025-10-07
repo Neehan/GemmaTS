@@ -36,3 +36,4 @@ class ETTh1BaseConfig:
     warmup_steps: int = 100
     logging_steps: int = 50
     seed: int = 42
+    use_bfloat16: bool = True

@@ -15,23 +15,33 @@ class GemmaTS(ChronosBoltModelForForecasting):
     """
 
     def __init__(
-        self, config, gemma_model_name: str, text_prompt: Optional[str] = None
+        self,
+        config,
+        gemma_model_name: str,
+        text_prompt: Optional[str] = None,
+        use_bfloat16: bool = True,
     ):
         # Initialize parent (this creates encoder, output head, etc.)
         super().__init__(config)
 
         # Now replace the decoder
-        self._init_gemma_decoder(gemma_model_name, text_prompt)
+        self._init_gemma_decoder(gemma_model_name, text_prompt, use_bfloat16)
 
-    def _init_gemma_decoder(self, model_name: str, text_prompt: Optional[str] = None):
+    def _init_gemma_decoder(
+        self,
+        model_name: str,
+        text_prompt: Optional[str] = None,
+        use_bfloat16: bool = True,
+    ):
         """Replace T5 decoder with Gemma."""
         # Remove T5 decoder
         del self.decoder
 
         # Load Gemma with HF token if available
         hf_token = os.getenv("HF_TOKEN")
+        dtype = torch.bfloat16 if use_bfloat16 else torch.float32
         gemma = AutoModelForCausalLM.from_pretrained(
-            model_name, torch_dtype=torch.float32, token=hf_token
+            model_name, torch_dtype=dtype, token=hf_token
         )
 
         # Detect model type and extract the text model
@@ -151,6 +161,7 @@ def create_gemma_ts(
     patch_stride: int = 8,
     text_prompt: Optional[str] = None,
     freeze: bool = True,
+    use_bfloat16: bool = True,
 ):
     """Create GemmaTS from Chronos config.
 
@@ -168,7 +179,7 @@ def create_gemma_ts(
     config.chronos_config["input_patch_size"] = patch_size
     config.chronos_config["input_patch_stride"] = patch_stride
 
-    model = GemmaTS(config, gemma_model, text_prompt)
+    model = GemmaTS(config, gemma_model, text_prompt, use_bfloat16)
 
     if freeze:
         for param in model.parameters():

@@ -204,6 +204,7 @@ def main(config_name):
             patch_size=config.input_patch_size,
             patch_stride=config.input_patch_stride,
             freeze=config.freeze,
+            use_bfloat16=config.use_bfloat16,
         )
     elif config_name == "patchtst":
         logger.info("Initializing PatchTST baseline model...")
@@ -234,6 +235,7 @@ def main(config_name):
             patch_stride=config.input_patch_stride,
             text_prompt=config.text_prompt,
             freeze=config.freeze,
+            use_bfloat16=config.use_bfloat16,
         )
 
     # Training arguments
