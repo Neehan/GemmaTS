@@ -101,7 +101,22 @@ class GemmaTS(ChronosBoltModelForForecasting):
     def _compute_numeric_embedding(self, tokenizer):
         """Compute average embedding of numeric tokens from Gemma."""
         numeric_tokens = tokenizer(
-            ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "-", "e"],
+            [
+                "0",
+                "1",
+                "2",
+                "3",
+                "4",
+                "5",
+                "6",
+                "7",
+                "8",
+                "9",
+                ".",
+                "-",
+                "e",
+                "time series",
+            ],
             return_tensors="pt",
             add_special_tokens=False,
         )
@@ -275,7 +290,7 @@ def create_gemma_ts(
             param.requires_grad = True
 
         # unfreeze encoder's last layer
-        for param in model.encoder.parameters():
+        for param in model.encoder.block[-1].parameters():
             param.requires_grad = True
 
         # unfreeze last Gemma MLP
